@@ -30455,6 +30455,16 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 const fmt = (iso) => iso ? new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const LOCATIONS = ["Appliance Bay", "BA Store", "Hose Store", "Store Room", "Watch Room", "Yard"];
+// Fire 1 / Fire 2 / Fire 3 (EQ-0004..0006) — the only appliances with a tyre panel for now.
+const TIRE_MONITORED_ASSET_IDS = new Set(["EQ-0004", "EQ-0005", "EQ-0006"]);
+const defaultTires = () => [
+    { id: "front-left", position: "Front Left", psi: null, lastChecked: null },
+    { id: "front-right", position: "Front Right", psi: null, lastChecked: null },
+    { id: "mid-left", position: "Middle Left", psi: null, lastChecked: null },
+    { id: "mid-right", position: "Middle Right", psi: null, lastChecked: null },
+    { id: "rear-left", position: "Rear Left", psi: null, lastChecked: null },
+    { id: "rear-right", position: "Rear Right", psi: null, lastChecked: null },
+];
 const CATEGORIES = [
     { code: "A", label: "Appliance" },
     { code: "B", label: "Breathing Apparatus" },
@@ -30639,6 +30649,7 @@ const seedEquipment = () => [
     {
         id: uid(), assetId: "EQ-0004", name: "Fire 1", category: "A", location: "Appliance Bay",
         status: "serviceable", entryDate: todayISO(), serialNo: "", otherNo: "", withdrawn: false,
+        tires: defaultTires(),
         testTypes: [
             { id: uid(), name: "Routine Checks", intervalDays: 1, lastCompleted: null },
             { id: uid(), name: "Daily Inventory Check", intervalDays: 1, lastCompleted: null },
@@ -30650,6 +30661,7 @@ const seedEquipment = () => [
     {
         id: uid(), assetId: "EQ-0005", name: "Fire 2", category: "A", location: "Appliance Bay",
         status: "serviceable", entryDate: todayISO(), serialNo: "", otherNo: "", withdrawn: false,
+        tires: defaultTires(),
         testTypes: [
             { id: uid(), name: "Routine Checks", intervalDays: 1, lastCompleted: null },
             { id: uid(), name: "Daily Inventory Check", intervalDays: 1, lastCompleted: null },
@@ -30661,6 +30673,7 @@ const seedEquipment = () => [
     {
         id: uid(), assetId: "EQ-0006", name: "Fire 3", category: "A", location: "Appliance Bay",
         status: "serviceable", entryDate: todayISO(), serialNo: "", otherNo: "", withdrawn: false,
+        tires: defaultTires(),
         testTypes: [
             { id: uid(), name: "Routine Checks", intervalDays: 1, lastCompleted: null },
             { id: uid(), name: "Daily Inventory Check", intervalDays: 1, lastCompleted: null },
@@ -31261,6 +31274,12 @@ function EMSModule({ onBack }) {
                         await window.storage.set(EQUIP_KEY, JSON.stringify(eq), true);
                     }
                 }
+                // give any already-saved Fire 1/2/3 record a tyre panel if it predates this feature
+                const needsTires = eq.some((e) => TIRE_MONITORED_ASSET_IDS.has(e.assetId) && !e.tires);
+                if (needsTires) {
+                    eq = eq.map((e) => TIRE_MONITORED_ASSET_IDS.has(e.assetId) && !e.tires ? { ...e, tires: defaultTires() } : e);
+                    await window.storage.set(EQUIP_KEY, JSON.stringify(eq), true);
+                }
                 let lg;
                 try {
                     const r = await window.storage.get(LOG_KEY, true);
@@ -31484,6 +31503,11 @@ function EMSModule({ onBack }) {
         persistEquipment(next);
         setSelected((s) => (s ? next.find((e) => e.id === s.id) : s));
     }
+    function updateTires(eq, tires) {
+        const next = equipment.map((e) => (e.id === eq.id ? { ...e, tires } : e));
+        persistEquipment(next);
+        setSelected((s) => (s ? next.find((e) => e.id === s.id) : s));
+    }
     const filtered = useMemo(() => {
         if (!equipment)
             return [];
@@ -31561,12 +31585,12 @@ function EMSModule({ onBack }) {
                             });
                         } }))),
                     filtered.length === 0 && (React.createElement("div", { style: { gridColumn: "1/-1", padding: 40, textAlign: "center", color: MUTED, border: `1px dashed ${LINE}`, borderRadius: 10 } }, "Nothing matches. Adjust the filters, or add a new item to the register.")))))),
-        selected && (React.createElement(DetailDrawer, { item: selected, log: log.filter((l) => l.equipmentId === selected.id), onClose: () => setSelected(null), onSignoff: (testType, unit) => setSignoffFor({ equipment: selected, testType, unit }), onReactivate: () => reactivate(selected), onViewQr: (target) => setQrFor(target || selected), onToggleWithdrawn: () => toggleWithdrawn(selected), onPhotoChange: (photo) => updatePhoto(selected, photo), onRemoveTestType: (testType) => removeTestType(selected, testType), onEditTestType: (testType) => setEditTestTypeFor({ equipment: selected, testType }), onEditUnit: (unit) => setEditUnitFor({ equipment: selected, unit }) })),
+        selected && (React.createElement(DetailDrawer, { item: selected, log: log.filter((l) => l.equipmentId === selected.id), onClose: () => setSelected(null), onSignoff: (testType, unit) => setSignoffFor({ equipment: selected, testType, unit }), onReactivate: () => reactivate(selected), onViewQr: (target) => setQrFor(target || selected), onToggleWithdrawn: () => toggleWithdrawn(selected), onPhotoChange: (photo) => updatePhoto(selected, photo), onRemoveTestType: (testType) => removeTestType(selected, testType), onEditTestType: (testType) => setEditTestTypeFor({ equipment: selected, testType }), onEditUnit: (unit) => setEditUnitFor({ equipment: selected, unit }), onUpdateTires: (tires) => updateTires(selected, tires) })),
         editTestTypeFor && (React.createElement(EditTestTypeModal, { equipment: editTestTypeFor.equipment, testType: editTestTypeFor.testType, onCancel: () => setEditTestTypeFor(null), onSave: (updates) => {
                 updateTestType(editTestTypeFor.equipment, editTestTypeFor.testType.id, updates);
                 setEditTestTypeFor(null);
             } })),
-        editUnitFor && (React.createElement(EditUnitModal, { equipment: editUnitFor.equipment, unit: editUnitFor.unit, onCancel: () => setEditUnitFor(null), onSave: (updates) => {
+        editUnitFor && (React.createElement(EditUnitModal, { equipment: editUnitFor.equipment, unit: editUnitFor.unit, locations: locations || LOCATIONS, onCancel: () => setEditUnitFor(null), onSave: (updates) => {
                 updateUnit(editUnitFor.equipment, editUnitFor.unit.id, updates);
                 setEditUnitFor(null);
             } })),
@@ -31944,7 +31968,7 @@ function TagCard({ item, categories, onClick, onEdit, selectMode, selected, onTo
             React.createElement(ChevronRight, { size: 16, color: MUTED }))));
 }
 // ---------- detail drawer ----------
-function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, onToggleWithdrawn, onPhotoChange, onRemoveTestType, onEditTestType, onEditUnit }) {
+function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, onToggleWithdrawn, onPhotoChange, onRemoveTestType, onEditTestType, onEditUnit, onUpdateTires }) {
     const [photoBusy, setPhotoBusy] = useState(false);
     async function handlePhotoUpload(e) {
         const file = e.target.files && e.target.files[0];
@@ -32056,6 +32080,7 @@ function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, o
                 React.createElement(InfoRow, { label: "Serial no.", value: item.serialNo }),
                 React.createElement(InfoRow, { label: "Other no.", value: item.otherNo }),
                 React.createElement(InfoRow, { label: "Location", value: item.location })),
+            TIRE_MONITORED_ASSET_IDS.has(item.assetId) && React.createElement(TirePanel, { tires: item.tires || defaultTires(), onSave: onUpdateTires }),
             item.units ? (React.createElement(React.Fragment, null,
                 React.createElement("div", { style: { marginTop: 26 } },
                     React.createElement(SectionLabel, null, "Test types (applies to every unit)"),
@@ -32161,6 +32186,40 @@ function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, o
                             l.notes,
                             "\"")))))))));
 }
+function TireTile({ tire, onCommit }) {
+    const [value, setValue] = useState(tire.psi ?? "");
+    useEffect(() => { setValue(tire.psi ?? ""); }, [tire.psi]);
+    function commit() {
+        const trimmed = String(value).trim();
+        const next = trimmed === "" ? null : Number(trimmed);
+        if (next === (tire.psi ?? null)) return;
+        onCommit(next);
+    }
+    return (React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 92 } },
+        React.createElement("div", { style: { width: 44, height: 44, borderRadius: 8, background: "#2B2419", border: `3px solid ${LINE}` } }),
+        React.createElement("div", { style: { fontSize: 11, color: MUTED, textAlign: "center" } }, tire.position),
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
+            React.createElement("input", { type: "number", value: value, onChange: (e) => setValue(e.target.value), onBlur: commit, onKeyDown: (e) => { if (e.key === "Enter") e.target.blur(); }, placeholder: "—", style: { width: 52, textAlign: "center", ...inputStyle, padding: "4px 6px", fontSize: 13 } }),
+            React.createElement("span", { style: { fontSize: 11, color: MUTED } }, "psi")),
+        tire.lastChecked && React.createElement("div", { style: { fontSize: 10, color: MUTED } }, `Checked ${fmt(tire.lastChecked)}`)));
+}
+function TirePanel({ tires, onSave }) {
+    function commitTire(id, psi) {
+        onSave(tires.map((t) => (t.id === id ? { ...t, psi, lastChecked: todayISO() } : t)));
+    }
+    const byId = (id) => tires.find((t) => t.id === id);
+    const rows = [
+        ["front-left", "front-right"],
+        ["mid-left", "mid-right"],
+        ["rear-left", "rear-right"],
+    ].map(([leftId, rightId]) => React.createElement("div", { key: leftId, style: { display: "flex", justifyContent: "center", alignItems: "center", gap: 36 } },
+        React.createElement(TireTile, { tire: byId(leftId), onCommit: (psi) => commitTire(leftId, psi) }),
+        React.createElement("div", { style: { width: 28, height: 4, background: LINE, borderRadius: 2 } }),
+        React.createElement(TireTile, { tire: byId(rightId), onCommit: (psi) => commitTire(rightId, psi) })));
+    return (React.createElement("div", { style: { marginTop: 22, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: 18 } },
+        React.createElement(SectionLabel, null, "Tyre pressures"),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 16, marginTop: 14 } }, rows)));
+}
 function UnitsSection({ item, onSignoff, onViewUnitQr, onEditUnit }) {
     const [expandedId, setExpandedId] = useState(null);
     const [unitQuery, setUnitQuery] = useState("");
@@ -32197,7 +32256,8 @@ function UnitsSection({ item, onSignoff, onViewUnitQr, onEditUnit }) {
                             React.createElement("span", { style: { width: 8, height: 8, borderRadius: "50%", background: dotColor, display: "inline-block", flexShrink: 0 } }),
                             React.createElement("div", null,
                                 React.createElement("div", { style: { fontWeight: 600, fontSize: 13.5 } }, u.label),
-                                u.otherNo && React.createElement("div", { style: { fontSize: 11.5, color: MUTED, fontFamily: MONO_FONT } }, u.otherNo))),
+                                u.otherNo && React.createElement("div", { style: { fontSize: 11.5, color: MUTED, fontFamily: MONO_FONT } }, u.otherNo),
+                                u.location && React.createElement("div", { style: { fontSize: 11.5, color: MUTED } }, u.location))),
                         React.createElement(ChevronRight, { size: 16, color: MUTED, style: { transform: isOpen ? "rotate(90deg)" : "none" } })),
                     isOpen && (React.createElement("div", { style: { borderTop: `1px solid ${LINE}`, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 10 } },
                         React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
@@ -32299,17 +32359,23 @@ function EditTestTypeModal({ equipment, testType, onCancel, onSave }) {
         React.createElement(ModalActions, { onCancel: onCancel },
             React.createElement("button", { disabled: !canSave, onClick: () => onSave({ name: name.trim(), intervalDays }), style: { ...primaryBtn, opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" } }, "Save changes"))));
 }
-function EditUnitModal({ equipment, unit, onCancel, onSave }) {
+function EditUnitModal({ equipment, unit, locations, onCancel, onSave }) {
+    const locList = locations || LOCATIONS;
     const [label, setLabel] = useState(unit.label);
     const [otherNo, setOtherNo] = useState(unit.otherNo || "");
+    const [location, setLocation] = useState(unit.location || "");
     const canSave = label.trim().length > 0;
     return (React.createElement(ModalShell, { title: "Edit unit", subtitle: equipment.name, onCancel: onCancel },
         React.createElement(Field, { label: "Label" },
             React.createElement("input", { value: label, onChange: (e) => setLabel(e.target.value), style: inputStyle })),
         React.createElement(Field, { label: "Serial / other number" },
             React.createElement("input", { value: otherNo, onChange: (e) => setOtherNo(e.target.value), style: { ...inputStyle, fontFamily: MONO_FONT } })),
+        React.createElement(Field, { label: "Location" },
+            React.createElement("select", { value: location, onChange: (e) => setLocation(e.target.value), style: inputStyle },
+                React.createElement("option", { value: "" }, "— not set —"),
+                locList.map((l) => (React.createElement("option", { key: l, value: l }, l))))),
         React.createElement(ModalActions, { onCancel: onCancel },
-            React.createElement("button", { disabled: !canSave, onClick: () => onSave({ label: label.trim(), otherNo: otherNo.trim() }), style: { ...primaryBtn, opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" } }, "Save changes"))));
+            React.createElement("button", { disabled: !canSave, onClick: () => onSave({ label: label.trim(), otherNo: otherNo.trim(), location }), style: { ...primaryBtn, opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" } }, "Save changes"))));
 }
 function EditTileModal({ item, categories, locations, onCancel, onSave }) {
     const locList = locations || LOCATIONS;
