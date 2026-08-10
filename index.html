@@ -30241,40 +30241,108 @@ window.ReactDOM = ReactDOM;
 
 </script>
 <script>
-// ---------- window.storage shim (backed by browser localStorage) ----------
-// This makes the app work as a normal standalone webpage. Data is saved in
-// this browser only — it won't sync between different computers/phones.
-// A real deployment would replace this with a proper shared backend.
-(function () {
-  const NS = "firestation-app:";
-  function fullKey(key, shared) {
-    return NS + (shared ? "shared:" : "personal:") + key;
-  }
-  window.storage = {
-    async get(key, shared = false) {
-      const raw = window.localStorage.getItem(fullKey(key, shared));
-      if (raw === null) throw new Error("Key not found: " + key);
-      return { key, value: raw, shared: !!shared };
+// ---------- real backend: session handling + API access ----------
+// Everything below talks to the Tan API (Azure Functions + Cosmos DB) instead of
+// browser-local storage, so data is genuinely shared across every device/browser —
+// access is enforced server-side per the signed-in user's role.
+const API_BASE = "https://tan-api-app.azurewebsites.net/api";
+const SESSION_KEY = "tan-auth-session";
+let authToken = null;
+let currentUser = null;
+
+function loadStoredSession() {
+    try {
+        const raw = window.localStorage.getItem(SESSION_KEY);
+        if (!raw) return null;
+        const { token, user } = JSON.parse(raw);
+        if (!token || !user) return null;
+        authToken = token;
+        currentUser = user;
+        return { token, user };
+    }
+    catch {
+        return null;
+    }
+}
+function storeSession(token, user) {
+    authToken = token;
+    currentUser = user;
+    window.localStorage.setItem(SESSION_KEY, JSON.stringify({ token, user }));
+}
+function clearSession() {
+    authToken = null;
+    currentUser = null;
+    window.localStorage.removeItem(SESSION_KEY);
+}
+
+async function apiFetch(path, options = {}) {
+    const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+    if (authToken) headers["Authorization"] = "Bearer " + authToken;
+    const res = await fetch(API_BASE + path, { ...options, headers });
+    if (res.status === 401) {
+        clearSession();
+        const err = new Error("Your session has expired — please log in again.");
+        err.sessionExpired = true;
+        throw err;
+    }
+    if (!res.ok) {
+        let message = "Something went wrong talking to the server.";
+        try {
+            const body = await res.json();
+            if (body && body.error) message = body.error;
+        }
+        catch { /* non-JSON error body, use default message */ }
+        throw new Error(message);
+    }
+    if (res.status === 204) return null;
+    return res.json();
+}
+
+// window.storage keeps its original get/set/delete shape so EMS's equipment/log
+// storage (not person-specific, so no role filtering needed) works completely
+// unchanged. Person-specific data (people, practical activity log, practical
+// assessments) goes through the dedicated, role-filtered API helpers below instead.
+window.storage = {
+    async get(key) {
+        const data = await apiFetch(`/kv/${encodeURIComponent(key)}`);
+        if (data.value === null || data.value === undefined) throw new Error("Key not found: " + key);
+        return { key, value: data.value, shared: true };
     },
-    async set(key, value, shared = false) {
-      window.localStorage.setItem(fullKey(key, shared), value);
-      return { key, value, shared: !!shared };
+    async set(key, value) {
+        await apiFetch(`/kv/${encodeURIComponent(key)}`, { method: "PUT", body: JSON.stringify({ value }) });
+        return { key, value, shared: true };
     },
-    async delete(key, shared = false) {
-      window.localStorage.removeItem(fullKey(key, shared));
-      return { key, deleted: true, shared: !!shared };
+    async delete(key) {
+        await apiFetch(`/kv/${encodeURIComponent(key)}`, { method: "PUT", body: JSON.stringify({ value: null }) });
+        return { key, deleted: true, shared: true };
     },
-    async list(prefix = "", shared = false) {
-      const marker = fullKey(prefix, shared);
-      const keys = [];
-      for (let i = 0; i < window.localStorage.length; i++) {
-        const k = window.localStorage.key(i);
-        if (k && k.startsWith(marker)) keys.push(k.slice(NS.length + (shared ? 7 : 9)));
-      }
-      return { keys, prefix, shared: !!shared };
+    async list() {
+        return { keys: [], prefix: "", shared: true };
     },
-  };
-})();
+};
+
+const peopleApi = {
+    list: () => apiFetch("/people").then((d) => d.people),
+    create: (person) => apiFetch("/people", { method: "POST", body: JSON.stringify(person) }).then((d) => d.person),
+    update: (id, updates) => apiFetch(`/people/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(updates) }).then((d) => d.person),
+    remove: (id) => apiFetch(`/people/${encodeURIComponent(id)}`, { method: "DELETE" }),
+};
+const practicalLogApi = {
+    list: () => apiFetch("/practical-log").then((d) => d.entries),
+    create: (entry) => apiFetch("/practical-log", { method: "POST", body: JSON.stringify(entry) }).then((d) => d.entry),
+    remove: (id) => apiFetch(`/practical-log/${encodeURIComponent(id)}`, { method: "DELETE" }),
+};
+const practicalAssessmentsApi = {
+    list: () => apiFetch("/practical-assessments").then((d) => d.assessments),
+    create: (record) => apiFetch("/practical-assessments", { method: "POST", body: JSON.stringify(record) }).then((d) => d.assessment),
+    remove: (id) => apiFetch(`/practical-assessments/${encodeURIComponent(id)}`, { method: "DELETE" }),
+};
+const usersApi = {
+    list: () => apiFetch("/users").then((d) => d.users),
+    create: (user) => apiFetch("/users", { method: "POST", body: JSON.stringify(user) }).then((d) => d.user),
+    update: (email, updates) => apiFetch(`/users/${encodeURIComponent(email)}`, { method: "PUT", body: JSON.stringify(updates) }).then((d) => d.user),
+    remove: (email) => apiFetch(`/users/${encodeURIComponent(email)}`, { method: "DELETE" }),
+};
 
 </script>
 <script>
@@ -30409,24 +30477,11 @@ const categoryLabel = (code, cats = CATEGORIES) => {
     return c ? c.label : code;
 };
 const uid = () => Math.random().toString(36).slice(2, 10);
-const PEOPLE_KEY = "people:list";
-const DEFAULT_PEOPLE = [
-    { id: "seed-combes", name: "FF Combes", payrollNumber: "", rank: "Firefighter", watch: "Red", phone: "", emergencyName: "", emergencyPhone: "" },
-    { id: "seed-ryan", name: "FF Ryan", payrollNumber: "", rank: "Firefighter", watch: "Blue", phone: "", emergencyName: "", emergencyPhone: "" },
-    { id: "seed-pleasants", name: "FF Pleasants", payrollNumber: "", rank: "Firefighter", watch: "Green", phone: "", emergencyName: "", emergencyPhone: "" },
-];
+// Kept as a thin wrapper around the real API (name unchanged so every existing
+// call site — Personal Info, Practical, Theory, Reports, Calendar — needed no
+// changes). Seeding now happens once, server-side, not per-browser.
 async function loadPeopleWithSeed() {
-    try {
-        const r = await window.storage.get(PEOPLE_KEY, true);
-        return JSON.parse(r.value);
-    }
-    catch {
-        try {
-            await window.storage.set(PEOPLE_KEY, JSON.stringify(DEFAULT_PEOPLE), true);
-        }
-        catch { /* seeding failed — still hand back defaults for this render */ }
-        return DEFAULT_PEOPLE;
-    }
+    return peopleApi.list();
 }
 function resizeImageFile(file, maxDim = 640, quality = 0.72) {
     return new Promise((resolve, reject) => {
@@ -31547,7 +31602,11 @@ function TopBanner() {
                     React.createElement("div", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 16, color: "#F1ECE1", letterSpacing: 0.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, "Cornwall Airport Newquay"),
                     React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 10.5, letterSpacing: 2, color: AMBER, textTransform: "uppercase", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, "Aerodrome Fire & Rescue Service"))),
             React.createElement("div", { style: { fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: 26, letterSpacing: 6, color: "#F1ECE1", justifySelf: "center", whiteSpace: "nowrap" } }, "TAN"),
-            React.createElement("div", null))));
+            React.createElement("div", { style: { justifySelf: "end", display: "flex", alignItems: "center", gap: 10, minWidth: 0 } }, currentUser && (React.createElement(React.Fragment, null,
+                React.createElement("div", { style: { textAlign: "right", minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 12.5, color: "#F1ECE1", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, currentUser.name),
+                    React.createElement("div", { style: { fontSize: 10.5, color: AMBER, textTransform: "uppercase", letterSpacing: 1, fontFamily: MONO_FONT } }, currentUser.role)),
+                React.createElement("button", { onClick: () => { clearSession(); window.location.reload(); }, style: { background: "none", border: "1px solid rgba(241,236,225,0.35)", color: "#F1ECE1", padding: "6px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" } }, "Log out")))))));
 }
 // ---------- header ----------
 function Header({ onAdd, onDueToday, dueTodayCount, onBack, selectMode, onToggleSelectMode, onManageCategories }) {
@@ -32431,12 +32490,49 @@ const primaryBtn = {
     fontSize: 14,
 };
 // ---------- top-level app shell ----------
+function LoginScreen({ onLoggedIn }) {
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [error, setError] = useState(null);
+    const [busy, setBusy] = useState(false);
+    async function submit(e) {
+        e.preventDefault();
+        if (!email.trim() || !password) return;
+        setBusy(true);
+        setError(null);
+        try {
+            const data = await apiFetch("/login", { method: "POST", body: JSON.stringify({ email: email.trim(), password }) });
+            storeSession(data.token, data.user);
+            onLoggedIn(data.user);
+        }
+        catch (err) {
+            setError(err.message || "Couldn't sign in.");
+        }
+        setBusy(false);
+    }
+    const canSubmit = email.trim().length > 0 && password.length > 0 && !busy;
+    return (React.createElement("div", { style: { background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: BODY_FONT, color: INK, padding: 20 } },
+        React.createElement(FontImport, null),
+        React.createElement("form", { onSubmit: submit, style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 12, padding: "32px 28px", width: "min(380px, 100%)", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" } },
+            React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 3, color: RED, textTransform: "uppercase", marginBottom: 6 } }, "Station Competency & Equipment System"),
+            React.createElement("h1", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 28, margin: "0 0 22px" } }, "Sign in"),
+            error && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, marginBottom: 16, fontSize: 13 } }, error),
+            React.createElement(Field, { label: "Email" },
+                React.createElement("input", { type: "email", value: email, onChange: (e) => setEmail(e.target.value), style: inputStyle, autoFocus: true })),
+            React.createElement(Field, { label: "Password" },
+                React.createElement("input", { type: "password", value: password, onChange: (e) => setPassword(e.target.value), style: inputStyle })),
+            React.createElement("button", { type: "submit", disabled: !canSubmit, style: { ...primaryBtn, width: "100%", marginTop: 8, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" } }, busy ? "Signing in…" : "Sign in"))));
+}
 function App() {
+    const [session, setSession] = useState(() => loadStoredSession());
     const [view, setView] = useState("dashboard");
     const [focusAssessmentId, setFocusAssessmentId] = useState(null);
     function goToAssessment(assessmentId) {
         setFocusAssessmentId(assessmentId);
         setView("practical");
+    }
+    if (!session) {
+        return React.createElement(LoginScreen, { onLoggedIn: (user) => setSession({ user }) });
     }
     if (view === "ems")
         return React.createElement(EMSModule, { onBack: () => setView("dashboard") });
@@ -32450,6 +32546,8 @@ function App() {
         return React.createElement(TheoryModule, { onBack: () => setView("dashboard") });
     if (view === "reports")
         return React.createElement(ReportsModule, { onBack: () => setView("dashboard"), onGoToAssessment: goToAssessment });
+    if (view === "users")
+        return React.createElement(UsersModule, { onBack: () => setView("dashboard") });
     return React.createElement(Dashboard, { onOpen: setView });
 }
 function Dashboard({ onOpen }) {
@@ -32466,7 +32564,8 @@ function Dashboard({ onOpen }) {
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Theory", desc: "Self-declared understanding, gated behind reading the material. Concept preview of the full item list available now.", icon: React.createElement(BookOpen, { size: 22 }), color: GREEN, badge: "Preview", onClick: () => onOpen("theory") }),
                 React.createElement(ModuleCard, { eyebrow: "Records", title: "Personal Info", desc: "Payroll number, contact details, and emergency contact for each firefighter.", icon: React.createElement(User, { size: 22 }), color: "#6B5B95", live: true, onClick: () => onOpen("personal") }),
                 React.createElement(ModuleCard, { eyebrow: "Overview", title: "Calendar", desc: "Everything coming due, in one place. Currently shows EMS \u2014 Practical and Theory will join once built.", icon: React.createElement(CalendarDays, { size: 22 }), color: "#2E6E7E", live: true, onClick: () => onOpen("calendar") }),
-                React.createElement(ModuleCard, { eyebrow: "Overview", title: "Reports", desc: "Pick one or more firefighters and see their full Practical and Theory status in one place.", icon: React.createElement(BarChart3, { size: 22 }), color: "#345995", live: true, onClick: () => onOpen("reports") })))));
+                React.createElement(ModuleCard, { eyebrow: "Overview", title: "Reports", desc: "Pick one or more firefighters and see their full Practical and Theory status in one place.", icon: React.createElement(BarChart3, { size: 22 }), color: "#345995", live: true, onClick: () => onOpen("reports") }),
+                currentUser && currentUser.role === "admin" && React.createElement(ModuleCard, { eyebrow: "Admin", title: "Manage Users", desc: "Create and manage logins — who can sign in, and what they can see.", icon: React.createElement(Users, { size: 22 }), color: "#6B5B95", live: true, onClick: () => onOpen("users") })))));
 }
 function ModuleCard({ eyebrow, title, desc, icon, color, live, badge, onClick }) {
     const badgeText = live ? "Live" : (badge || "Coming soon");
@@ -32494,7 +32593,7 @@ function PersonalInfoModule({ onBack }) {
     const [people, setPeople] = useState(null);
     const [ready, setReady] = useState(false);
     const [error, setError] = useState(null);
-    const [meId, setMeId] = useState(null); // stand-in for "logged in as"
+    const [meId, setMeId] = useState(currentUser && currentUser.personId ? currentUser.personId : null);
     const [tab, setTab] = useState("me"); // 'me' | 'all'
     const [editing, setEditing] = useState(false);
     useEffect(() => {
@@ -32510,21 +32609,18 @@ function PersonalInfoModule({ onBack }) {
             }
         })();
     }, []);
-    async function persist(next) {
-        setPeople(next);
-        try {
-            await window.storage.set(PEOPLE_KEY, JSON.stringify(next), true);
-        }
-        catch {
-            setError("Change made, but saving failed — it may not persist.");
-        }
-    }
-    function savePerson(person) {
+    async function savePerson(person) {
         const exists = people.some((p) => p.id === person.id);
-        const next = exists ? people.map((p) => (p.id === person.id ? person : p)) : [...people, person];
-        persist(next);
-        setMeId(person.id);
-        setEditing(false);
+        try {
+            const saved = exists ? await peopleApi.update(person.id, person) : await peopleApi.create(person);
+            setPeople((prev) => exists ? prev.map((p) => (p.id === saved.id ? saved : p)) : [...prev, saved]);
+            setMeId(saved.id);
+            setEditing(false);
+            setError(null);
+        }
+        catch (err) {
+            setError(err.message || "Couldn't save that.");
+        }
     }
     const me = people?.find((p) => p.id === meId) || null;
     return (React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
@@ -32672,10 +32768,9 @@ function CalendarModule({ onBack }) {
             const peopleList = await loadPeopleWithSeed();
             setPeople(peopleList);
             try {
-                const r2 = await window.storage.get(PRACTICAL_ASSESSMENTS_KEY, true);
-                setAssessments(r2 ? JSON.parse(r2.value) : []);
+                setAssessments(await practicalAssessmentsApi.list());
             }
-            catch { /* no assessments saved yet */ }
+            catch { /* no assessments saved yet, or couldn't load */ }
             setReady(true);
         })();
     }, []);
@@ -32893,7 +32988,7 @@ function PracticalAssessmentFlow({ people, focusAssessmentId, onFocusHandled }) 
     const [selectedPeople, setSelectedPeople] = useState([]);
     const [methods, setMethods] = useState([]);
     const [date, setDate] = useState(todayISO());
-    const [assessedBy, setAssessedBy] = useState("");
+    const [assessedBy, setAssessedBy] = useState(currentUser ? currentUser.name : "");
     const [notes, setNotes] = useState("");
     const [unitKey, setUnitKey] = useState("");
     const [results, setResults] = useState({});
@@ -32902,10 +32997,9 @@ function PracticalAssessmentFlow({ people, focusAssessmentId, onFocusHandled }) 
     useEffect(() => {
         (async () => {
             try {
-                const r = await window.storage.get(PRACTICAL_ASSESSMENTS_KEY, true);
-                setAssessments(r ? JSON.parse(r.value) : []);
+                setAssessments(await practicalAssessmentsApi.list());
             }
-            catch { /* no assessments saved yet */ }
+            catch { /* no assessments saved yet, or couldn't load */ }
             setReady(true);
         })();
     }, []);
@@ -32924,16 +33018,6 @@ function PracticalAssessmentFlow({ people, focusAssessmentId, onFocusHandled }) 
                 el.scrollIntoView({ behavior: "smooth", block: "center" });
         }, 50);
         setTimeout(() => setHighlightedId((prev) => (prev === assessmentId ? null : prev)), 4000);
-    }
-    async function persist(next) {
-        setAssessments(next);
-        try {
-            await window.storage.set(PRACTICAL_ASSESSMENTS_KEY, JSON.stringify(next), true);
-            setSaveError(null);
-        }
-        catch {
-            setSaveError("Storage is full, so this assessment couldn't be saved.");
-        }
     }
     function togglePerson(id) {
         setSelectedPeople((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -32956,11 +33040,10 @@ function PracticalAssessmentFlow({ people, focusAssessmentId, onFocusHandled }) 
     const unit = PRACTICAL_UNITS.find((u) => u.key === unitKey);
     const hasAnyResult = Object.values(results).some((r) => Object.keys(r).length > 0);
     const canSave = !!unit && hasAnyResult;
-    function saveAssessment() {
+    async function saveAssessment() {
         if (!canSave)
             return;
-        const record = {
-            id: uid(),
+        const draft = {
             unitKey,
             unitName: unit.name,
             date,
@@ -32976,21 +33059,34 @@ function PracticalAssessmentFlow({ people, focusAssessmentId, onFocusHandled }) 
                     results: unit.elements.map((el, i) => ({ element: el, status: personResults[i] || null })),
                 };
             }),
-            createdAt: new Date().toISOString(),
         };
-        persist([record, ...assessments]);
-        setStep(1);
-        setSelectedPeople([]);
-        setMethods([]);
-        setDate(todayISO());
-        setNotes("");
-        setUnitKey("");
-        setResults({});
+        try {
+            const saved = await practicalAssessmentsApi.create(draft);
+            setAssessments((prev) => [saved, ...prev]);
+            setSaveError(null);
+            setStep(1);
+            setSelectedPeople([]);
+            setMethods([]);
+            setDate(todayISO());
+            setNotes("");
+            setUnitKey("");
+            setResults({});
+        }
+        catch (err) {
+            setSaveError(err.message || "Couldn't save this assessment.");
+        }
     }
-    function deleteAssessment(id) {
+    async function deleteAssessment(id) {
         if (!window.confirm("Remove this assessment? This can't be undone."))
             return;
-        persist(assessments.filter((a) => a.id !== id));
+        try {
+            await practicalAssessmentsApi.remove(id);
+            setAssessments((prev) => prev.filter((a) => a.id !== id));
+            setSaveError(null);
+        }
+        catch (err) {
+            setSaveError(err.message || "Couldn't remove this assessment.");
+        }
     }
     const step1Card = (React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 22, marginTop: 24 } },
         React.createElement(Field, { label: "Who's being assessed (select one or more)" },
@@ -33100,20 +33196,14 @@ function PracticalModule({ onBack, focusAssessmentId, onFocusHandled }) {
     const [methods, setMethods] = useState([]);
     const [description, setDescription] = useState("");
     const [date, setDate] = useState(todayISO());
-    const [loggedBy, setLoggedBy] = useState("");
+    const [loggedBy, setLoggedBy] = useState(currentUser ? currentUser.name : "");
     const [pendingFiles, setPendingFiles] = useState([]);
     const [filesBusy, setFilesBusy] = useState(false);
     const [fileError, setFileError] = useState(null);
     useEffect(() => {
         (async () => {
             try {
-                const peopleList = await loadPeopleWithSeed();
-                let entryList = [];
-                try {
-                    const r = await window.storage.get(PRACTICAL_LOG_KEY, true);
-                    entryList = r ? JSON.parse(r.value) : [];
-                }
-                catch { entryList = []; }
+                const [peopleList, entryList] = await Promise.all([loadPeopleWithSeed(), practicalLogApi.list()]);
                 setPeople(peopleList);
                 setEntries(entryList);
                 setReady(true);
@@ -33124,16 +33214,6 @@ function PracticalModule({ onBack, focusAssessmentId, onFocusHandled }) {
             }
         })();
     }, []);
-    async function persist(next) {
-        setEntries(next);
-        try {
-            await window.storage.set(PRACTICAL_LOG_KEY, JSON.stringify(next), true);
-            setSaveError(null);
-        }
-        catch {
-            setSaveError("Storage is full, so this couldn't be saved. Remove some attachments (yours or older entries') and try again.");
-        }
-    }
     function toggleMethod(m) {
         setMethods((prev) => prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]);
     }
@@ -33169,12 +33249,11 @@ function PracticalModule({ onBack, focusAssessmentId, onFocusHandled }) {
         setPendingFiles([]);
         setFileError(null);
     }
-    function submit() {
+    async function submit() {
         if (!canSubmit)
             return;
         const person = people.find((p) => p.id === personId);
-        const entry = {
-            id: uid(),
+        const draft = {
             personId,
             personName: person ? person.name : "Unknown",
             activityType,
@@ -33183,15 +33262,28 @@ function PracticalModule({ onBack, focusAssessmentId, onFocusHandled }) {
             date,
             loggedBy: loggedBy.trim(),
             files: pendingFiles.map(({ id, name, type, size, dataUrl }) => ({ id, name, type, size, dataUrl })),
-            createdAt: new Date().toISOString(),
         };
-        persist([entry, ...entries]);
-        resetForm();
+        try {
+            const saved = await practicalLogApi.create(draft);
+            setEntries((prev) => [saved, ...prev]);
+            setSaveError(null);
+            resetForm();
+        }
+        catch (err) {
+            setSaveError(err.message || "Couldn't save this entry.");
+        }
     }
-    function deleteEntry(id) {
+    async function deleteEntry(id) {
         if (!window.confirm("Remove this activity log entry? This can't be undone."))
             return;
-        persist(entries.filter((e) => e.id !== id));
+        try {
+            await practicalLogApi.remove(id);
+            setEntries((prev) => prev.filter((e) => e.id !== id));
+            setSaveError(null);
+        }
+        catch (err) {
+            setSaveError(err.message || "Couldn't remove this entry.");
+        }
     }
     const formCard = (React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 22, marginTop: 24 } },
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 } },
@@ -33633,10 +33725,9 @@ function ReportsModule({ onBack, onGoToAssessment }) {
             const peopleList = await loadPeopleWithSeed();
             let assessmentList = [];
             try {
-                const r = await window.storage.get(PRACTICAL_ASSESSMENTS_KEY, true);
-                assessmentList = r ? JSON.parse(r.value) : [];
+                assessmentList = await practicalAssessmentsApi.list();
             }
-            catch { /* no assessments saved yet */ }
+            catch { /* no assessments saved yet, or couldn't load */ }
             setPeople(peopleList);
             setAssessments(assessmentList);
             setReady(true);
@@ -33672,6 +33763,160 @@ function ReportsModule({ onBack, onGoToAssessment }) {
                     React.createElement("div", { style: { marginTop: 24 } }, selected.length === 0
                         ? React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "Select one or more firefighters above to see their report.")
                         : selected.map((p) => React.createElement(PersonReportCard, { key: p.id, person: p, assessments, onGoToAssessment })))))));
+}
+
+const WATCHES = ["Red", "White", "Blue", "Green"];
+const ROLES = ["firefighter", "management", "admin"];
+function NewUserForm({ people, onCreated }) {
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [name, setName] = useState("");
+    const [role, setRole] = useState("firefighter");
+    const [watch, setWatch] = useState("Red");
+    const [personId, setPersonId] = useState("");
+    const [error, setError] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const canSave = email.trim() && password.trim().length >= 8 && name.trim() && !busy;
+    async function submit(e) {
+        e.preventDefault();
+        if (!canSave) return;
+        setBusy(true);
+        setError(null);
+        try {
+            const user = await usersApi.create({ email: email.trim(), password: password.trim(), name: name.trim(), role, watch: role === "admin" ? null : watch, personId: personId || null });
+            onCreated(user);
+            setEmail(""); setPassword(""); setName(""); setRole("firefighter"); setWatch("Red"); setPersonId("");
+        }
+        catch (err) {
+            setError(err.message || "Couldn't create that login.");
+        }
+        setBusy(false);
+    }
+    return (React.createElement("form", { onSubmit: submit, style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 22, marginTop: 24 } },
+        React.createElement("h2", { style: { fontFamily: DISPLAY_FONT, fontSize: 18, fontWeight: 600, margin: "0 0 14px" } }, "Create a login"),
+        error && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, marginBottom: 14, fontSize: 13 } }, error),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 } },
+            React.createElement(Field, { label: "Name" }, React.createElement("input", { value: name, onChange: (e) => setName(e.target.value), style: inputStyle })),
+            React.createElement(Field, { label: "Email" }, React.createElement("input", { type: "email", value: email, onChange: (e) => setEmail(e.target.value), style: inputStyle })),
+            React.createElement(Field, { label: "Temporary password (min 8 characters)" }, React.createElement("input", { type: "text", value: password, onChange: (e) => setPassword(e.target.value), style: inputStyle })),
+            React.createElement(Field, { label: "Role" },
+                React.createElement("select", { value: role, onChange: (e) => setRole(e.target.value), style: inputStyle }, ROLES.map((r) => React.createElement("option", { key: r, value: r }, r)))),
+            role !== "admin" && React.createElement(Field, { label: "Watch" },
+                React.createElement("select", { value: watch, onChange: (e) => setWatch(e.target.value), style: inputStyle }, WATCHES.map((w) => React.createElement("option", { key: w, value: w }, w)))),
+            React.createElement(Field, { label: "Linked staff record (optional)" },
+                React.createElement("select", { value: personId, onChange: (e) => setPersonId(e.target.value), style: inputStyle },
+                    React.createElement("option", { value: "" }, "None"),
+                    people.map((p) => React.createElement("option", { key: p.id, value: p.id }, p.name))))),
+        React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", marginTop: 8 } },
+            React.createElement("button", { type: "submit", disabled: !canSave, style: { ...primaryBtn, background: "#6B5B95", opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" } }, "Create login"))));
+}
+function UserRow({ user, people, onUpdated, onDeleted }) {
+    const [editing, setEditing] = useState(false);
+    const [role, setRole] = useState(user.role);
+    const [watch, setWatch] = useState(user.watch || "Red");
+    const [personId, setPersonId] = useState(user.personId || "");
+    const [newPassword, setNewPassword] = useState("");
+    const [error, setError] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const person = people.find((p) => p.id === user.personId);
+    async function save() {
+        setBusy(true);
+        setError(null);
+        try {
+            const updates = { role, watch: role === "admin" ? null : watch, personId: personId || null };
+            if (newPassword.trim()) updates.password = newPassword.trim();
+            const updated = await usersApi.update(user.email, updates);
+            onUpdated(updated);
+            setEditing(false);
+            setNewPassword("");
+        }
+        catch (err) {
+            setError(err.message || "Couldn't save that.");
+        }
+        setBusy(false);
+    }
+    async function remove() {
+        if (!window.confirm(`Remove the login for ${user.email}? They won't be able to sign in any more.`)) return;
+        try {
+            await usersApi.remove(user.email);
+            onDeleted(user.email);
+        }
+        catch (err) {
+            setError(err.message || "Couldn't remove that login.");
+        }
+    }
+    return (React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "14px 16px" } },
+        error && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "8px 12px", borderRadius: 6, marginBottom: 10, fontSize: 12.5 } }, error),
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" } },
+            React.createElement("div", null,
+                React.createElement("div", { style: { fontWeight: 600, fontSize: 14.5 } }, user.name, person && ` (${person.name})`),
+                React.createElement("div", { style: { fontSize: 12.5, color: MUTED, fontFamily: MONO_FONT } }, user.email)),
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                React.createElement("span", { style: { fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", padding: "3px 9px", borderRadius: 20, background: PANEL_RAISED, color: MUTED } }, user.role, user.watch ? ` · ${user.watch}` : ""),
+                React.createElement("button", { onClick: () => setEditing((v) => !v), style: { background: "none", border: `1px solid ${LINE}`, color: INK, padding: "6px 9px", borderRadius: 6, display: "flex", alignItems: "center" } }, React.createElement(Pencil, { size: 12 })),
+                React.createElement("button", { onClick: remove, style: { background: "none", border: `1px solid ${LINE}`, color: RED, padding: "6px 9px", borderRadius: 6, display: "flex", alignItems: "center" } }, React.createElement(Trash2, { size: 12 })))),
+        editing && (React.createElement("div", { style: { marginTop: 14, paddingTop: 14, borderTop: `1px solid ${LINE}` } },
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 } },
+                React.createElement(Field, { label: "Role" },
+                    React.createElement("select", { value: role, onChange: (e) => setRole(e.target.value), style: inputStyle }, ROLES.map((r) => React.createElement("option", { key: r, value: r }, r)))),
+                role !== "admin" && React.createElement(Field, { label: "Watch" },
+                    React.createElement("select", { value: watch, onChange: (e) => setWatch(e.target.value), style: inputStyle }, WATCHES.map((w) => React.createElement("option", { key: w, value: w }, w)))),
+                React.createElement(Field, { label: "Linked staff record" },
+                    React.createElement("select", { value: personId, onChange: (e) => setPersonId(e.target.value), style: inputStyle },
+                        React.createElement("option", { value: "" }, "None"),
+                        people.map((p) => React.createElement("option", { key: p.id, value: p.id }, p.name)))),
+                React.createElement(Field, { label: "Reset password (leave blank to keep current)" },
+                    React.createElement("input", { type: "text", value: newPassword, onChange: (e) => setNewPassword(e.target.value), style: inputStyle }))),
+            React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 } },
+                React.createElement("button", { onClick: () => setEditing(false), style: { background: "none", border: `1px solid ${LINE}`, color: INK, padding: "9px 16px", borderRadius: 6, fontSize: 14 } }, "Cancel"),
+                React.createElement("button", { disabled: busy, onClick: save, style: { ...primaryBtn, background: "#6B5B95", opacity: busy ? 0.5 : 1 } }, "Save"))))));
+}
+function UsersModule({ onBack }) {
+    const [users, setUsers] = useState([]);
+    const [people, setPeople] = useState([]);
+    const [ready, setReady] = useState(false);
+    const [loadError, setLoadError] = useState(null);
+    useEffect(() => {
+        (async () => {
+            try {
+                const [userList, peopleList] = await Promise.all([usersApi.list(), loadPeopleWithSeed()]);
+                setUsers(userList);
+                setPeople(peopleList);
+            }
+            catch (err) {
+                setLoadError(err.message || "Couldn't load logins.");
+            }
+            setReady(true);
+        })();
+    }, []);
+    const userList = users.length === 0
+        ? React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "No logins yet — create the first one above.")
+        : React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, users.map((u) => React.createElement(UserRow, {
+            key: u.email,
+            user: u,
+            people,
+            onUpdated: (updated) => setUsers((prev) => prev.map((x) => x.email === updated.email ? updated : x)),
+            onDeleted: (email) => setUsers((prev) => prev.filter((x) => x.email !== email)),
+        })));
+    const body = React.createElement(React.Fragment, null,
+        React.createElement(NewUserForm, { people, onCreated: (u) => setUsers((prev) => [...prev, u]) }),
+        React.createElement("div", { style: { marginTop: 34 } },
+            React.createElement("h2", { style: { fontFamily: DISPLAY_FONT, fontSize: 20, fontWeight: 600, margin: "0 0 14px" } }, "Logins · ", users.length),
+            userList));
+    return (React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
+        React.createElement(FontImport, null),
+        React.createElement(TopBanner, null),
+        React.createElement("div", { style: { maxWidth: 900, margin: "0 auto", padding: "28px 20px 60px", position: "relative" } },
+            React.createElement("button", { onClick: onBack, style: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: MUTED, fontSize: 13, padding: 0, marginBottom: 20 } },
+                React.createElement(ChevronLeft, { size: 14 }),
+                " Dashboard"),
+            React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 3, color: "#6B5B95", textTransform: "uppercase", marginBottom: 4 } }, "Admin"),
+            React.createElement("h1", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 34, margin: 0 } }, "Manage Users"),
+            React.createElement("p", { style: { color: MUTED, fontSize: 14, marginTop: 8, maxWidth: 600 } }, "Create a login for each member of staff. Firefighters see only their own records, management sees their watch, admin sees everyone."),
+            loadError && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, margin: "16px 0", fontSize: 13 } }, loadError),
+            !ready
+                ? React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading…")
+                : body)));
 }
 
 var root = ReactDOM.createRoot(document.getElementById("root"));
