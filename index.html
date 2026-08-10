@@ -33062,6 +33062,7 @@ function demoStatus(str) {
     return "green";
 }
 const STATUS_COLOR = { green: GREEN, amber: AMBER, red: RED };
+const categoryHeading = (cat) => /^\d+$/.test(cat.key) ? `${cat.key}. ${cat.name}` : cat.name;
 function TheoryOverviewGrid({ categories, people, expanded, onToggle }) {
     const colWidth = 46;
     const gridStyle = { display: "grid", gridTemplateColumns: `minmax(220px, 2fr) repeat(${people.length}, ${colWidth}px)` };
@@ -33077,7 +33078,7 @@ function TheoryOverviewGrid({ categories, people, expanded, onToggle }) {
     categories.forEach((cat) => {
         items.push(React.createElement("button", { key: "div-" + cat.key, onClick: () => onToggle(cat.key), style: { gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 8, background: PANEL_RAISED, border: "none", borderTop: `1px solid ${LINE}`, borderBottom: `1px solid ${LINE}`, padding: "9px 10px", fontWeight: 600, fontSize: 13.5, cursor: "pointer", textAlign: "left" } },
             React.createElement(ChevronRight, { size: 14, color: MUTED, style: { transform: expanded[cat.key] ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 } }),
-            cat.name,
+            categoryHeading(cat),
             React.createElement("span", { style: { color: MUTED, fontWeight: 500, fontSize: 12 } }, "· ", cat.items.length)));
         if (!expanded[cat.key])
             return;
@@ -33102,7 +33103,7 @@ function TheoryItemRow({ text }) {
 function TheoryCategorySection({ category, expanded, onToggle }) {
     return (React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" } },
         React.createElement("button", { onClick: onToggle, style: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", padding: "14px 16px", cursor: "pointer", textAlign: "left" } },
-            React.createElement("span", { style: { fontWeight: 600, fontSize: 14.5 } }, category.name, " ", React.createElement("span", { style: { color: MUTED, fontWeight: 500, fontSize: 12.5 } }, "· ", category.items.length)),
+            React.createElement("span", { style: { fontWeight: 600, fontSize: 14.5 } }, categoryHeading(category), " ", React.createElement("span", { style: { color: MUTED, fontWeight: 500, fontSize: 12.5 } }, "· ", category.items.length)),
             React.createElement(ChevronRight, { size: 16, color: MUTED, style: { transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" } })),
         expanded && React.createElement("div", { style: { padding: "0 16px 8px" } }, category.items.map((item) => React.createElement(TheoryItemRow, { key: item, text: item })))));
 }
