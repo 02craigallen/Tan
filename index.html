@@ -32064,7 +32064,7 @@ function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, o
                     } },
                     React.createElement(RotateCcw, { size: 13 }),
                     " Reactivate into testing cycle")),
-                React.createElement("button", { onClick: onViewQr, style: {
+                React.createElement("button", { onClick: () => onViewQr(), style: {
                         display: "flex",
                         alignItems: "center",
                         gap: 6,
