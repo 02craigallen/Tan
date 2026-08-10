@@ -31501,15 +31501,19 @@ function TopBanner() {
                 maxWidth: 1180,
                 margin: "0 auto",
                 padding: "12px 20px",
-                display: "flex",
+                display: "grid",
+                gridTemplateColumns: "1fr auto 1fr",
                 alignItems: "center",
-                gap: 16,
+                gap: 12,
             } },
-            React.createElement("img", { src: LOGO_DATA_URI, alt: "Cornwall Airport Newquay Rescue and Firefighting Service", style: { height: 58, width: "auto", display: "block", flexShrink: 0, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.45))" } }),
-            React.createElement("div", { style: { width: 1, height: 40, background: "rgba(241,236,225,0.18)", flexShrink: 0 } }),
-            React.createElement("div", { style: { minWidth: 0 } },
-                React.createElement("div", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 16, color: "#F1ECE1", letterSpacing: 0.3, whiteSpace: "nowrap" } }, "Cornwall Airport Newquay"),
-                React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 10.5, letterSpacing: 2, color: AMBER, textTransform: "uppercase", marginTop: 2 } }, "Aerodrome Fire & Rescue Service")))));
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 16, minWidth: 0, overflow: "hidden" } },
+                React.createElement("img", { src: LOGO_DATA_URI, alt: "Cornwall Airport Newquay Rescue and Firefighting Service", style: { height: 58, width: "auto", display: "block", flexShrink: 0, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.45))" } }),
+                React.createElement("div", { style: { width: 1, height: 40, background: "rgba(241,236,225,0.18)", flexShrink: 0 } }),
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 16, color: "#F1ECE1", letterSpacing: 0.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, "Cornwall Airport Newquay"),
+                    React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 10.5, letterSpacing: 2, color: AMBER, textTransform: "uppercase", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, "Aerodrome Fire & Rescue Service"))),
+            React.createElement("div", { style: { fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: 26, letterSpacing: 6, color: "#F1ECE1", justifySelf: "center", whiteSpace: "nowrap" } }, "TAN"),
+            React.createElement("div", null))));
 }
 // ---------- header ----------
 function Header({ onAdd, onDueToday, dueTodayCount, onBack, selectMode, onToggleSelectMode, onManageCategories }) {
