@@ -31222,7 +31222,7 @@ const EQUIP_KEY = "ems:equipment";
 const LOG_KEY = "ems:signoff-log";
 const CATEGORIES_KEY = "ems:categories";
 const LOCATIONS_KEY = "ems:locations";
-function EMSModule({ onBack }) {
+function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
     const [equipment, setEquipment] = useState(null);
     const [log, setLog] = useState(null);
     const [ready, setReady] = useState(false);
@@ -31343,6 +31343,15 @@ function EMSModule({ onBack }) {
             }
         })();
     }, []);
+    useEffect(() => {
+        if (!ready || !focusAssetId || !equipment)
+            return;
+        const match = equipment.find((e) => e.assetId === focusAssetId);
+        if (match)
+            setSelected(match);
+        if (onFocusHandled)
+            onFocusHandled();
+    }, [ready, focusAssetId, equipment]);
     async function persistCategories(next) {
         setCategories(next);
         try {
@@ -31799,12 +31808,14 @@ function todayLong() {
 function LookupBar({ value, onChange, onSubmit, error }) {
     return (React.createElement("form", { onSubmit: onSubmit, style: { marginTop: 16, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10 } },
         React.createElement(ScanLine, { size: 16, color: MUTED }),
-        React.createElement("input", { value: value, onChange: (e) => onChange(e.target.value), placeholder: "Enter equipment ID (e.g. EQ-0001) \u2014 stands in for scanning until we're hosted", style: { flex: 1, border: "none", outline: "none", background: "transparent", color: INK, fontSize: 13.5, fontFamily: MONO_FONT } }),
+        React.createElement("input", { value: value, onChange: (e) => onChange(e.target.value), placeholder: "Enter equipment ID (e.g. EQ-0001) \u2014 or scan its QR tag", style: { flex: 1, border: "none", outline: "none", background: "transparent", color: INK, fontSize: 13.5, fontFamily: MONO_FONT } }),
         React.createElement("button", { type: "submit", style: { background: PANEL_RAISED, border: `1px solid ${LINE}`, color: INK, padding: "6px 14px", borderRadius: 6, fontSize: 13, fontWeight: 600 } }, "Go"),
         error && React.createElement("span", { style: { color: RED, fontSize: 12 } }, error)));
 }
 function QrModal({ item, onClose }) {
-    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(item.assetId)}`;
+    const isRealItem = Boolean(item.id);
+    const qrData = isRealItem ? `${window.location.origin}/?item=${encodeURIComponent(item.assetId)}` : item.assetId;
+    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(qrData)}`;
     return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
         React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" } }),
         React.createElement("div", { style: { position: "relative", background: "#fff", borderRadius: 10, width: "min(340px, 100%)", padding: 24, textAlign: "center" } },
@@ -31813,7 +31824,9 @@ function QrModal({ item, onClose }) {
             React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" } }, item.assetId),
             React.createElement("div", { style: { fontFamily: DISPLAY_FONT, fontSize: 20, fontWeight: 600, color: "#2B2419", marginTop: 2, marginBottom: 14 } }, item.name),
             React.createElement("img", { src: qrSrc, alt: `QR code for ${item.assetId}`, width: 200, height: 200, style: { margin: "0 auto", display: "block" } }),
-            React.createElement("div", { style: { fontSize: 11.5, color: "#7C7160", marginTop: 14, lineHeight: 1.5 } }, "Right now this QR just encodes the ID \u2014 once we're hosted, it'll link straight to this item's page for real camera scanning."),
+            React.createElement("div", { style: { fontSize: 11.5, color: "#7C7160", marginTop: 14, lineHeight: 1.5 } }, isRealItem
+                ? "Scan this with a phone camera to open this item's page directly \u2014 sign-in required first if not already signed in."
+                : "This QR just encodes the unit's ID for now \u2014 scanning it won't jump straight to the unit yet."),
             React.createElement("button", { onClick: () => window.print(), style: { display: "inline-flex", alignItems: "center", gap: 6, marginTop: 16, background: "#AF3A22", color: "#fff", border: "none", padding: "9px 16px", borderRadius: 6, fontSize: 13, fontWeight: 600 } },
                 React.createElement(Printer, { size: 14 }),
                 " Print tag"))));
@@ -32702,7 +32715,9 @@ function LoginScreen({ onLoggedIn }) {
 }
 function App() {
     const [session, setSession] = useState(() => loadStoredSession());
-    const [view, setView] = useState("dashboard");
+    const deepLinkAssetId = new URLSearchParams(window.location.search).get("item");
+    const [view, setView] = useState(() => (deepLinkAssetId ? "ems" : "dashboard"));
+    const [focusAssetId, setFocusAssetId] = useState(() => deepLinkAssetId);
     const [focusAssessmentId, setFocusAssessmentId] = useState(null);
     function goToAssessment(assessmentId) {
         setFocusAssessmentId(assessmentId);
@@ -32712,7 +32727,10 @@ function App() {
         return React.createElement(LoginScreen, { onLoggedIn: (user) => setSession({ user }) });
     }
     if (view === "ems")
-        return React.createElement(EMSModule, { onBack: () => setView("dashboard") });
+        return React.createElement(EMSModule, { onBack: () => setView("dashboard"), focusAssetId, onFocusHandled: () => {
+                setFocusAssetId(null);
+                window.history.replaceState({}, "", window.location.pathname);
+            } });
     if (view === "personal")
         return React.createElement(PersonalInfoModule, { onBack: () => setView("dashboard") });
     if (view === "calendar")
