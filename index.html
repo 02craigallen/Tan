@@ -30382,6 +30382,17 @@ const History = (p) => React.createElement(IconBase, { ...p },
     React.createElement("path", { d: "M3 12a9 9 0 1 0 3-6.7" }),
     React.createElement("polyline", { points: "3 3 3 9 9 9" }),
     React.createElement("polyline", { points: "12 8 12 12 15 14" }));
+const Flame = (p) => React.createElement(IconBase, { ...p },
+    React.createElement("path", { d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" }));
+const Building2 = (p) => React.createElement(IconBase, { ...p },
+    React.createElement("path", { d: "M6 22V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v18" }),
+    React.createElement("path", { d: "M14 9h4a1 1 0 0 1 1 1v12" }),
+    React.createElement("path", { d: "M2 22h20" }),
+    React.createElement("path", { d: "M9 6h1" }),
+    React.createElement("path", { d: "M9 10h1" }),
+    React.createElement("path", { d: "M9 14h1" }),
+    React.createElement("path", { d: "M17 13h1" }),
+    React.createElement("path", { d: "M17 17h1" }));
 const QrCode = (p) => (React.createElement(IconBase, { ...p },
     React.createElement("rect", { x: "3", y: "3", width: "7", height: "7" }),
     React.createElement("rect", { x: "14", y: "3", width: "7", height: "7" }),
@@ -30540,6 +30551,17 @@ const nextAssetId = (equipment) => {
     const nums = equipment.map((e) => parseInt((e.assetId || "").replace(/\D/g, ""), 10)).filter((n) => !isNaN(n));
     const next = (nums.length ? Math.max(...nums) : 0) + 1;
     return `EQ-${String(next).padStart(4, "0")}`;
+};
+// ---------- FAFAs (fire extinguishers) ----------
+const FAFA_BUILDINGS_KEY = "fafa:buildings";
+const FAFA_EXTINGUISHERS_KEY = "fafa:extinguishers";
+const FAFA_LOG_KEY = "fafa:signoff-log";
+const DEFAULT_FAFA_BUILDINGS = ["Fire Station", "ATC", "Terminal", "Haz Site"];
+const FAFA_TYPES = ["Water", "Foam", "CO2", "Dry Powder", "Wet Chemical"];
+const nextFafaAssetId = (list) => {
+    const nums = list.map((f) => parseInt((f.assetId || "").replace(/\D/g, ""), 10)).filter((n) => !isNaN(n));
+    const next = (nums.length ? Math.max(...nums) : 0) + 1;
+    return `FE-${String(next).padStart(4, "0")}`;
 };
 // Serials transcribed from screenshots of the old system — double-check these against
 // the physical cylinders. Numbers 1-4, 26 and 29 weren't visible in any screenshot.
@@ -32716,7 +32738,8 @@ function LoginScreen({ onLoggedIn }) {
 function App() {
     const [session, setSession] = useState(() => loadStoredSession());
     const deepLinkAssetId = new URLSearchParams(window.location.search).get("item");
-    const [view, setView] = useState(() => (deepLinkAssetId ? "ems" : "dashboard"));
+    const deepLinkView = deepLinkAssetId && deepLinkAssetId.startsWith("FE-") ? "fafa" : "ems";
+    const [view, setView] = useState(() => (deepLinkAssetId ? deepLinkView : "dashboard"));
     const [focusAssetId, setFocusAssetId] = useState(() => deepLinkAssetId);
     const [focusAssessmentId, setFocusAssessmentId] = useState(null);
     function goToAssessment(assessmentId) {
@@ -32728,6 +32751,11 @@ function App() {
     }
     if (view === "ems")
         return React.createElement(EMSModule, { onBack: () => setView("dashboard"), focusAssetId, onFocusHandled: () => {
+                setFocusAssetId(null);
+                window.history.replaceState({}, "", window.location.pathname);
+            } });
+    if (view === "fafa")
+        return React.createElement(FafaModule, { onBack: () => setView("dashboard"), focusAssetId, onFocusHandled: () => {
                 setFocusAssetId(null);
                 window.history.replaceState({}, "", window.location.pathname);
             } });
@@ -32755,6 +32783,7 @@ function Dashboard({ onOpen }) {
             React.createElement("p", { style: { color: MUTED, fontSize: 15, marginTop: 10, maxWidth: 520 } }, "Choose a module to get started."),
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginTop: 34 } },
                 React.createElement(ModuleCard, { eyebrow: "Equipment", title: "EMS", desc: "Test schedules, sign-offs, and full accountability history for every piece of station equipment.", icon: React.createElement(Wrench, { size: 22 }), color: RED, live: true, onClick: () => onOpen("ems") }),
+                React.createElement(ModuleCard, { eyebrow: "Equipment", title: "FAFAs", desc: "Fire extinguishers across every building on the airport, organised by location, with test dates and QR tags.", icon: React.createElement(Flame, { size: 22 }), color: "#AF3A22", live: true, onClick: () => onOpen("fafa") }),
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Practical", desc: "Log practical activities and evidence — formal sign-off against versioned criteria comes next.", icon: React.createElement(ClipboardCheck, { size: 22 }), color: AMBER, live: true, onClick: () => onOpen("practical") }),
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Theory", desc: "Self-declared understanding, gated behind reading the material. Concept preview of the full item list available now.", icon: React.createElement(BookOpen, { size: 22 }), color: GREEN, badge: "Preview", onClick: () => onOpen("theory") }),
                 React.createElement(ModuleCard, { eyebrow: "Records", title: "Personal Info", desc: "Payroll number, contact details, and emergency contact for each firefighter.", icon: React.createElement(User, { size: 22 }), color: "#6B5B95", live: true, onClick: () => onOpen("personal") }),
@@ -32784,6 +32813,464 @@ function ModuleCard({ eyebrow, title, desc, icon, color, live, badge, onClick })
             "Open ",
             React.createElement(ArrowRight, { size: 14 }))));
 }
+// ---------- FAFA module ----------
+function fafaSoonestDue(item) {
+    const infos = item.testTypes.map(dueInfo);
+    if (infos.some((i) => i.state === "overdue")) return "overdue";
+    if (infos.some((i) => i.state === "soon")) return "soon";
+    return "ok";
+}
+function AddFafaModal({ onCancel, onAdd, nextId, buildings, defaultBuilding }) {
+    const [assetId, setAssetId] = useState(nextId);
+    const [type, setType] = useState(FAFA_TYPES[0]);
+    const [building, setBuilding] = useState(defaultBuilding || buildings[0] || "");
+    const [spot, setSpot] = useState("");
+    const [serialNo, setSerialNo] = useState("");
+    const [entryDate, setEntryDate] = useState(todayISO());
+    const [tests, setTests] = useState([{ name: "Annual Service", intervalDays: 365 }]);
+    const canSubmit = assetId.trim() && building && tests.every((t) => t.name.trim());
+    function updateTest(i, patch) {
+        setTests(tests.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
+    }
+    const testRows = tests.map((t, i) => React.createElement("div", { key: i, style: { display: "flex", gap: 8 } },
+        React.createElement("input", { value: t.name, onChange: (e) => updateTest(i, { name: e.target.value }), placeholder: "e.g. Annual Service", style: { ...inputStyle, flex: 2 } }),
+        React.createElement("select", { value: t.intervalDays, onChange: (e) => updateTest(i, { intervalDays: Number(e.target.value) }), style: { ...inputStyle, flex: 1 } },
+            React.createElement("option", { value: 30 }, "Monthly"),
+            React.createElement("option", { value: 90 }, "Quarterly"),
+            React.createElement("option", { value: 180 }, "Six Monthly"),
+            React.createElement("option", { value: 365 }, "Annual"),
+            React.createElement("option", { value: 1825 }, "5-Yearly")),
+        tests.length > 1 && React.createElement("button", { onClick: () => setTests(tests.filter((_, idx) => idx !== i)), style: { background: "none", border: "none", color: MUTED } },
+            React.createElement(X, { size: 16 }))));
+    return (React.createElement(ModalShell, { title: "Add fire extinguisher", onCancel: onCancel },
+        React.createElement(Field, { label: "Asset ID" },
+            React.createElement("input", { value: assetId, onChange: (e) => setAssetId(e.target.value), style: { ...inputStyle, fontFamily: MONO_FONT } })),
+        React.createElement(Field, { label: "Type" },
+            React.createElement("select", { value: type, onChange: (e) => setType(e.target.value), style: inputStyle }, FAFA_TYPES.map((t) => React.createElement("option", { key: t, value: t }, t)))),
+        React.createElement(Field, { label: "Building" },
+            React.createElement("select", { value: building, onChange: (e) => setBuilding(e.target.value), style: inputStyle }, buildings.map((b) => React.createElement("option", { key: b, value: b }, b)))),
+        React.createElement(Field, { label: "Room / exact spot" },
+            React.createElement("input", { value: spot, onChange: (e) => setSpot(e.target.value), placeholder: "e.g. Kitchen, Corridor by Bay 2", style: inputStyle })),
+        React.createElement(Field, { label: "Serial no. (optional)" },
+            React.createElement("input", { value: serialNo, onChange: (e) => setSerialNo(e.target.value), style: inputStyle })),
+        React.createElement(Field, { label: "Entry date" },
+            React.createElement("input", { type: "date", value: entryDate, onChange: (e) => setEntryDate(e.target.value), style: inputStyle })),
+        React.createElement(Field, { label: "Test / service schedule" },
+            React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+                testRows,
+                React.createElement("button", { onClick: () => setTests([...tests, { name: "", intervalDays: 365 }]), style: { alignSelf: "flex-start", background: "none", border: "none", color: RED, fontSize: 13, fontWeight: 600, display: "flex", gap: 6, alignItems: "center", padding: "4px 0" } },
+                    React.createElement(Plus, { size: 14 }),
+                    " Add another schedule item"))),
+        React.createElement(ModalActions, { onCancel: onCancel },
+            React.createElement("button", { disabled: !canSubmit, onClick: () => onAdd({
+                    id: uid(),
+                    assetId: assetId.trim(),
+                    name: `${type} Extinguisher`,
+                    type,
+                    building,
+                    spot: spot.trim(),
+                    serialNo: serialNo.trim(),
+                    entryDate,
+                    status: "serviceable",
+                    withdrawn: false,
+                    testTypes: tests.map((t) => ({ id: uid(), name: t.name.trim(), intervalDays: t.intervalDays, lastCompleted: null })),
+                }), style: { ...primaryBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" } }, "Add extinguisher"))));
+}
+function EditFafaModal({ item, buildings, onCancel, onSave }) {
+    const [type, setType] = useState(item.type);
+    const [building, setBuilding] = useState(item.building);
+    const [spot, setSpot] = useState(item.spot || "");
+    const [serialNo, setSerialNo] = useState(item.serialNo || "");
+    const [entryDate, setEntryDate] = useState(item.entryDate || todayISO());
+    return (React.createElement(ModalShell, { title: "Edit fire extinguisher", subtitle: item.assetId, onCancel: onCancel },
+        React.createElement(Field, { label: "Type" },
+            React.createElement("select", { value: type, onChange: (e) => setType(e.target.value), style: inputStyle }, FAFA_TYPES.map((t) => React.createElement("option", { key: t, value: t }, t)))),
+        React.createElement(Field, { label: "Building" },
+            React.createElement("select", { value: building, onChange: (e) => setBuilding(e.target.value), style: inputStyle }, buildings.map((b) => React.createElement("option", { key: b, value: b }, b)))),
+        React.createElement(Field, { label: "Room / exact spot" },
+            React.createElement("input", { value: spot, onChange: (e) => setSpot(e.target.value), style: inputStyle })),
+        React.createElement(Field, { label: "Serial no." },
+            React.createElement("input", { value: serialNo, onChange: (e) => setSerialNo(e.target.value), style: inputStyle })),
+        React.createElement(Field, { label: "Entry date" },
+            React.createElement("input", { type: "date", value: entryDate, onChange: (e) => setEntryDate(e.target.value), style: inputStyle })),
+        React.createElement(ModalActions, { onCancel: onCancel },
+            React.createElement("button", { onClick: () => onSave({ type, name: `${type} Extinguisher`, building, spot: spot.trim(), serialNo: serialNo.trim(), entryDate }), style: primaryBtn }, "Save changes"))));
+}
+function FafaSignoffModal({ item, testType, onCancel, onSubmit }) {
+    const [status, setStatus] = useState("serviceable");
+    const [signedBy, setSignedBy] = useState("");
+    const [notes, setNotes] = useState("");
+    const canSubmit = signedBy.trim().length > 0;
+    const statusBtns = ["serviceable", "unserviceable"].map((s) => React.createElement("button", { key: s, onClick: () => setStatus(s), style: {
+            flex: 1,
+            padding: "10px",
+            borderRadius: 6,
+            border: `1px solid ${status === s ? (s === "unserviceable" ? RED : GREEN) : LINE}`,
+            background: status === s ? (s === "unserviceable" ? "#F7DFD8" : "#E4EBDB") : PANEL,
+            color: status === s ? (s === "unserviceable" ? "#8A2A18" : "#3C5528") : MUTED,
+            fontWeight: 600,
+            fontSize: 13,
+            textTransform: "capitalize",
+        } }, s));
+    return (React.createElement(ModalShell, { title: `Sign off · ${testType.name}`, subtitle: `${item.assetId} · ${item.building}`, onCancel: onCancel },
+        React.createElement(Field, { label: "Signed off by" },
+            React.createElement("input", { value: signedBy, onChange: (e) => setSignedBy(e.target.value), placeholder: "Your name", style: inputStyle })),
+        React.createElement(Field, { label: "Status" },
+            React.createElement("div", { style: { display: "flex", gap: 8 } }, statusBtns)),
+        React.createElement(Field, { label: "Notes (optional)" },
+            React.createElement("textarea", { value: notes, onChange: (e) => setNotes(e.target.value), rows: 3, placeholder: "Anything worth flagging…", style: { ...inputStyle, resize: "vertical" } })),
+        React.createElement(ModalActions, { onCancel: onCancel },
+            React.createElement("button", { disabled: !canSubmit, onClick: () => onSubmit({ testType, status, signedBy: signedBy.trim(), notes: notes.trim() }), style: { ...primaryBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" } }, "Confirm sign-off"))));
+}
+function FafaBuildingRow({ building, count, overdue, soon, onClick }) {
+    return React.createElement("button", { onClick: onClick, style: { width: "100%", textAlign: "left", background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" } },
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
+            React.createElement(Building2, { size: 18, color: MUTED }),
+            React.createElement("div", null,
+                React.createElement("div", { style: { fontWeight: 600, fontSize: 15 } }, building),
+                React.createElement("div", { style: { fontSize: 12.5, color: MUTED, marginTop: 2 } }, `${count} extinguisher${count !== 1 ? "s" : ""}`))),
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
+            overdue > 0 && React.createElement(StatChip, { label: "Overdue", value: overdue, color: RED }),
+            soon > 0 && React.createElement(StatChip, { label: "Due soon", value: soon, color: AMBER }),
+            React.createElement(ChevronRight, { size: 18, color: MUTED })));
+}
+function FafaCard({ item, onClick }) {
+    const worst = fafaSoonestDue(item);
+    const dotColor = item.withdrawn ? MUTED : item.status === "unserviceable" ? RED : worst === "overdue" ? RED : worst === "soon" ? AMBER : GREEN;
+    return React.createElement("button", { onClick: onClick, style: { textAlign: "left", background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "14px 16px", cursor: "pointer" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
+            React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, color: MUTED } }, item.assetId),
+            React.createElement("span", { style: { width: 9, height: 9, borderRadius: "50%", background: dotColor, display: "inline-block", flexShrink: 0 } })),
+        React.createElement("div", { style: { fontWeight: 600, fontSize: 14.5, marginTop: 4 } }, item.type),
+        React.createElement("div", { style: { fontSize: 12.5, color: MUTED, marginTop: 2 } }, item.spot || "—"));
+}
+function FafaDetailDrawer({ item, log, buildings, onClose, onSignoff, onReactivate, onToggleWithdrawn, onEdit, onViewQr, onRemoveTestType, onEditTestType }) {
+    const rows = item.testTypes.map((t) => {
+        const info = dueInfo(t);
+        const color = info.state === "overdue" ? RED : info.state === "soon" ? AMBER : MUTED;
+        return React.createElement("div", { key: t.id, style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 } },
+            React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 13.5, fontWeight: 600 } }, t.name),
+                React.createElement("div", { style: { fontSize: 11.5, color, fontWeight: 600, marginTop: 2 } }, info.label)),
+            React.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center" } },
+                React.createElement("button", { onClick: () => onSignoff(t), style: { background: PANEL_RAISED, border: `1px solid ${LINE}`, color: INK, padding: "6px 10px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" } }, "Sign off"),
+                React.createElement("button", { onClick: () => onEditTestType(t), title: "Edit", style: { width: 28, height: 28, borderRadius: 6, background: PANEL_RAISED, border: `1px solid ${LINE}`, display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, flexShrink: 0 } },
+                    React.createElement(Pencil, { size: 12 })),
+                React.createElement("button", { onClick: () => onRemoveTestType(t), title: "Remove", style: { width: 28, height: 28, borderRadius: 6, background: PANEL_RAISED, border: `1px solid ${LINE}`, display: "flex", alignItems: "center", justifyContent: "center", color: RED, flexShrink: 0 } },
+                    React.createElement(Trash2, { size: 12 }))));
+    });
+    const entries = log.filter((l) => l.fafaId === item.id).slice().reverse();
+    const logRows = entries.map((l) => React.createElement("div", { key: l.id, style: { borderTop: `1px solid ${LINE}`, padding: "10px 0" } },
+        React.createElement("div", { style: { fontSize: 13, fontWeight: 600 } }, l.testTypeName),
+        React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 2 } },
+            fmt(l.date),
+            " · ",
+            l.signedBy,
+            " · marked ",
+            React.createElement("span", { style: { color: l.status === "unserviceable" ? RED : GREEN, fontWeight: 600 } }, l.status)),
+        l.notes && React.createElement("div", { style: { fontSize: 12, color: INK, marginTop: 4, fontStyle: "italic" } }, `"${l.notes}"`)));
+    return React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 40 } },
+        React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" } }),
+        React.createElement("div", { style: { position: "absolute", right: 0, top: 0, bottom: 0, width: "min(520px, 100%)", background: BG, borderLeft: `1px solid ${LINE}`, overflowY: "auto", padding: 24 } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 1.5, color: MUTED, textTransform: "uppercase" } },
+                        item.building,
+                        item.spot && ` · ${item.spot}`,
+                        " · ",
+                        item.assetId),
+                    React.createElement("h2", { style: { fontFamily: DISPLAY_FONT, fontSize: 26, margin: "4px 0 0", fontWeight: 600 } }, item.type)),
+                React.createElement("button", { onClick: onClose, style: { background: "none", border: "none", color: MUTED } },
+                    React.createElement(X, { size: 20 }))),
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 14, flexWrap: "wrap" } },
+                React.createElement("span", { style: {
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        background: item.status === "unserviceable" ? "#F7DFD8" : "#E4EBDB",
+                        color: item.status === "unserviceable" ? "#8A2A18" : "#3C5528",
+                        padding: "5px 12px", borderRadius: 20, fontSize: 13, fontWeight: 600, textTransform: "capitalize",
+                    } },
+                    item.status === "unserviceable" ? React.createElement(AlertTriangle, { size: 14 }) : React.createElement(CheckCircle2, { size: 14 }),
+                    item.status),
+                item.status === "unserviceable" && !item.withdrawn && React.createElement("button", { onClick: onReactivate, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: INK, padding: "5px 12px", borderRadius: 20, fontSize: 13 } },
+                    React.createElement(RotateCcw, { size: 13 }),
+                    " Reactivate into testing cycle"),
+                React.createElement("button", { onClick: onViewQr, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: INK, padding: "5px 12px", borderRadius: 20, fontSize: 13 } },
+                    React.createElement(QrCode, { size: 13 }),
+                    " View QR tag"),
+                React.createElement("button", { onClick: onEdit, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: INK, padding: "5px 12px", borderRadius: 20, fontSize: 13 } },
+                    React.createElement(Pencil, { size: 13 }),
+                    " Edit"),
+                React.createElement("button", { onClick: onToggleWithdrawn, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: item.withdrawn ? GREEN : RED, padding: "5px 12px", borderRadius: 20, fontSize: 13 } }, item.withdrawn ? "Restore to register" : "Withdraw from service")),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 22, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: 16 } },
+                React.createElement(InfoRow, { label: "Entry date", value: fmt(item.entryDate) }),
+                React.createElement(InfoRow, { label: "Serial no.", value: item.serialNo }),
+                React.createElement(InfoRow, { label: "Building", value: item.building }),
+                React.createElement(InfoRow, { label: "Spot", value: item.spot })),
+            React.createElement("div", { style: { marginTop: 26 } },
+                React.createElement(SectionLabel, null, "Test / service schedule"),
+                React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, marginTop: 10 } }, rows)),
+            entries.length > 0 && React.createElement("div", { style: { marginTop: 26 } },
+                React.createElement(SectionLabel, { icon: React.createElement(History, { size: 13 }) }, "Sign-off history"),
+                React.createElement("div", null, logRows))));
+}
+function ManageFafaBuildingsModal({ buildings, extinguishers, onCancel, onSave }) {
+    const [draft, setDraft] = useState([...buildings]);
+    const [newBuilding, setNewBuilding] = useState("");
+    const [error, setError] = useState("");
+    function countInUse(b) {
+        return (extinguishers || []).filter((f) => f.building === b).length;
+    }
+    function addBuilding() {
+        const trimmed = newBuilding.trim();
+        if (!trimmed) return;
+        if (draft.some((b) => b.toLowerCase() === trimmed.toLowerCase())) {
+            setError(`"${trimmed}" already exists.`);
+            return;
+        }
+        setDraft([...draft, trimmed]);
+        setNewBuilding("");
+        setError("");
+    }
+    function removeBuilding(b) {
+        if (countInUse(b) > 0) return;
+        setDraft(draft.filter((x) => x !== b));
+    }
+    const rows = draft.map((b) => {
+        const inUse = countInUse(b);
+        return React.createElement("div", { key: b, style: { display: "flex", justifyContent: "space-between", alignItems: "center", border: `1px solid ${LINE}`, borderRadius: 8, padding: "8px 12px" } },
+            React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 14, fontWeight: 600 } }, b),
+                inUse > 0 && React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 2 } }, `${inUse} extinguisher${inUse !== 1 ? "s" : ""}`)),
+            React.createElement("button", { onClick: () => removeBuilding(b), disabled: inUse > 0, title: inUse > 0 ? "Move extinguishers out of this building first" : "Remove", style: {
+                    display: "flex", alignItems: "center", gap: 6, background: "none",
+                    border: `1px solid ${inUse > 0 ? LINE : RED}`, color: inUse > 0 ? MUTED : RED,
+                    padding: "6px 10px", borderRadius: 6, fontSize: 12.5, cursor: inUse > 0 ? "not-allowed" : "pointer", opacity: inUse > 0 ? 0.6 : 1,
+                } },
+                React.createElement(Trash2, { size: 13 }),
+                " Remove"));
+    });
+    return (React.createElement(ModalShell, { title: "Manage buildings", onCancel: onCancel },
+        React.createElement("div", { style: { fontSize: 12.5, color: MUTED, marginBottom: 14 } }, "Add or remove buildings. A building in use by an extinguisher can't be removed until nothing points to it."),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, maxHeight: "50vh", overflowY: "auto" } }, rows),
+        error && React.createElement("div", { style: { color: RED, fontSize: 12.5, marginTop: 10 } }, error),
+        React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 14 } },
+            React.createElement("input", { value: newBuilding, onChange: (e) => { setNewBuilding(e.target.value); setError(""); }, placeholder: "New building name", style: { ...inputStyle, flex: 1 }, onKeyDown: (e) => { if (e.key === "Enter") { e.preventDefault(); addBuilding(); } } }),
+            React.createElement("button", { onClick: addBuilding, style: { display: "flex", alignItems: "center", gap: 6, background: PANEL_RAISED, border: `1px solid ${LINE}`, color: INK, padding: "9px 14px", borderRadius: 6, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" } },
+                React.createElement(Plus, { size: 14 }),
+                " Add")),
+        React.createElement(ModalActions, { onCancel: onCancel },
+            React.createElement("button", { onClick: () => onSave(draft), style: primaryBtn }, "Save changes"))));
+}
+function FafaModule({ onBack, focusAssetId, onFocusHandled }) {
+    const [buildings, setBuildings] = useState(null);
+    const [extinguishers, setExtinguishers] = useState(null);
+    const [log, setLog] = useState(null);
+    const [ready, setReady] = useState(false);
+    const [error, setError] = useState(null);
+    const [selectedBuilding, setSelectedBuilding] = useState(null);
+    const [selected, setSelected] = useState(null);
+    const [query, setQuery] = useState("");
+    const [showAdd, setShowAdd] = useState(false);
+    const [showManageBuildings, setShowManageBuildings] = useState(false);
+    const [editFor, setEditFor] = useState(null);
+    const [signoffFor, setSignoffFor] = useState(null);
+    const [editTestTypeFor, setEditTestTypeFor] = useState(null);
+    const [qrFor, setQrFor] = useState(null);
+    useEffect(() => {
+        (async () => {
+            try {
+                let list;
+                try {
+                    const r = await window.storage.get(FAFA_EXTINGUISHERS_KEY, true);
+                    list = r ? JSON.parse(r.value) : [];
+                }
+                catch {
+                    list = [];
+                }
+                let lg;
+                try {
+                    const r = await window.storage.get(FAFA_LOG_KEY, true);
+                    lg = r ? JSON.parse(r.value) : [];
+                }
+                catch {
+                    lg = [];
+                }
+                let blds;
+                try {
+                    const r = await window.storage.get(FAFA_BUILDINGS_KEY, true);
+                    blds = r ? JSON.parse(r.value) : null;
+                }
+                catch {
+                    blds = null;
+                }
+                if (!blds) {
+                    blds = DEFAULT_FAFA_BUILDINGS;
+                    await window.storage.set(FAFA_BUILDINGS_KEY, JSON.stringify(blds), true);
+                }
+                else {
+                    const missing = DEFAULT_FAFA_BUILDINGS.filter((b) => !blds.includes(b));
+                    if (missing.length > 0) {
+                        blds = [...blds, ...missing];
+                        await window.storage.set(FAFA_BUILDINGS_KEY, JSON.stringify(blds), true);
+                    }
+                }
+                setExtinguishers(list);
+                setLog(lg);
+                setBuildings(blds);
+                setReady(true);
+            }
+            catch (e) {
+                setError("Couldn't load fire extinguisher data. You can still browse, but changes may not save.");
+                setExtinguishers([]);
+                setLog([]);
+                setBuildings(DEFAULT_FAFA_BUILDINGS);
+                setReady(true);
+            }
+        })();
+    }, []);
+    useEffect(() => {
+        if (!ready || !focusAssetId || !extinguishers)
+            return;
+        const match = extinguishers.find((f) => f.assetId === focusAssetId);
+        if (match) {
+            setSelected(match);
+            setSelectedBuilding(match.building);
+        }
+        if (onFocusHandled)
+            onFocusHandled();
+    }, [ready, focusAssetId, extinguishers]);
+    async function persistExtinguishers(next) {
+        setExtinguishers(next);
+        try {
+            await window.storage.set(FAFA_EXTINGUISHERS_KEY, JSON.stringify(next), true);
+        }
+        catch {
+            setError("Change made, but saving failed — it may not persist.");
+        }
+    }
+    async function persistLog(next) {
+        setLog(next);
+        try {
+            await window.storage.set(FAFA_LOG_KEY, JSON.stringify(next), true);
+        }
+        catch {
+            setError("Change made, but saving failed — it may not persist.");
+        }
+    }
+    async function persistBuildings(next) {
+        setBuildings(next);
+        try {
+            await window.storage.set(FAFA_BUILDINGS_KEY, JSON.stringify(next), true);
+        }
+        catch {
+            setError("Change made, but saving failed — it may not persist.");
+        }
+    }
+    function addFafa(item) {
+        persistExtinguishers([...extinguishers, item]);
+        setShowAdd(false);
+    }
+    function updateSelected(next) {
+        persistExtinguishers(extinguishers.map((f) => (f.id === next.id ? next : f)));
+        setSelected(next);
+    }
+    function editFafa(item, updates) {
+        const next = { ...item, ...updates };
+        updateSelected(next);
+        setEditFor(null);
+    }
+    function toggleWithdrawn(item) {
+        updateSelected({ ...item, withdrawn: !item.withdrawn });
+    }
+    function reactivate(item) {
+        updateSelected({ ...item, status: "serviceable" });
+    }
+    function removeTestType(item, testType) {
+        if (!window.confirm(`Remove "${testType.name}" from ${item.assetId}? Its past sign-off history stays in the log.`))
+            return;
+        updateSelected({ ...item, testTypes: item.testTypes.filter((t) => t.id !== testType.id) });
+    }
+    function updateTestType(item, testTypeId, updates) {
+        updateSelected({ ...item, testTypes: item.testTypes.map((t) => (t.id === testTypeId ? { ...t, ...updates } : t)) });
+        setEditTestTypeFor(null);
+    }
+    function submitSignoff({ testType, status, signedBy, notes }) {
+        const item = signoffFor.item;
+        const nextTestTypes = item.testTypes.map((t) => (t.id === testType.id ? { ...t, lastCompleted: todayISO() } : t));
+        updateSelected({ ...item, status, testTypes: nextTestTypes });
+        const entry = { id: uid(), fafaId: item.id, testTypeId: testType.id, testTypeName: testType.name, status, signedBy, notes, date: todayISO() };
+        persistLog([...log, entry]);
+        setSignoffFor(null);
+    }
+    const buildingStats = useMemo(() => {
+        if (!extinguishers || !buildings) return [];
+        return buildings.map((b) => {
+            const items = extinguishers.filter((f) => f.building === b && !f.withdrawn);
+            const overdue = items.filter((f) => fafaSoonestDue(f) === "overdue").length;
+            const soon = items.filter((f) => fafaSoonestDue(f) === "soon").length;
+            return { building: b, count: items.length, overdue, soon };
+        });
+    }, [extinguishers, buildings]);
+    const buildingItems = useMemo(() => {
+        if (!extinguishers || !selectedBuilding) return [];
+        return extinguishers.filter((f) => f.building === selectedBuilding && (!query || f.type.toLowerCase().includes(query.toLowerCase()) || (f.spot || "").toLowerCase().includes(query.toLowerCase()) || f.assetId.toLowerCase().includes(query.toLowerCase())));
+    }, [extinguishers, selectedBuilding, query]);
+    if (!ready) {
+        return React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
+            React.createElement(FontImport, null),
+            React.createElement(TopBanner, null),
+            React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading fire extinguisher register…"));
+    }
+    const header = React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6, flexWrap: "wrap", gap: 16 } },
+        React.createElement("div", null,
+            React.createElement("button", { onClick: selectedBuilding ? () => setSelectedBuilding(null) : onBack, style: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: MUTED, fontSize: 13, padding: 0, marginBottom: 10 } },
+                React.createElement(ChevronRight, { size: 14, style: { transform: "rotate(180deg)" } }),
+                selectedBuilding ? " All buildings" : " Dashboard"),
+            React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 3, color: RED, textTransform: "uppercase", marginBottom: 4 } }, "FAFA · Fire Extinguishers"),
+            React.createElement("h1", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 34, margin: 0, letterSpacing: 0.5 } }, selectedBuilding || "Fire Extinguishers")),
+        React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } },
+            !selectedBuilding && React.createElement("button", { onClick: () => setShowManageBuildings(true), style: { display: "flex", alignItems: "center", gap: 8, background: PANEL, color: INK, border: `1px solid ${LINE}`, padding: "10px 14px", borderRadius: 6, fontWeight: 600, fontSize: 14 } },
+                React.createElement(Pencil, { size: 15 }),
+                " Buildings"),
+            React.createElement("button", { onClick: () => setShowAdd(true), style: { display: "flex", alignItems: "center", gap: 8, background: RED, color: "#fff", border: "none", padding: "10px 18px", borderRadius: 6, fontWeight: 600, fontSize: 14 } },
+                React.createElement(Plus, { size: 16 }),
+                " Add extinguisher")));
+    const buildingsTable = React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginTop: 22 } },
+        buildingStats.length === 0 && React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "No buildings yet — add one to get started."),
+        buildingStats.map((s) => React.createElement(FafaBuildingRow, { key: s.building, building: s.building, count: s.count, overdue: s.overdue, soon: s.soon, onClick: () => setSelectedBuilding(s.building) })));
+    const buildingGrid = React.createElement(React.Fragment, null,
+        React.createElement("div", { style: { position: "relative", marginTop: 22, maxWidth: 360 } },
+            React.createElement(Search, { size: 15, style: { position: "absolute", left: 12, top: 11, color: MUTED } }),
+            React.createElement("input", { value: query, onChange: (e) => setQuery(e.target.value), placeholder: "Search this building…", style: { width: "100%", background: PANEL, border: `1px solid ${LINE}`, borderRadius: 6, padding: "9px 12px 9px 34px", color: INK, fontSize: 14, outline: "none" } })),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, marginTop: 20 } },
+            buildingItems.map((item) => React.createElement(FafaCard, { key: item.id, item, onClick: () => setSelected(item) })),
+            buildingItems.length === 0 && React.createElement("div", { style: { gridColumn: "1/-1", padding: 40, textAlign: "center", color: MUTED, border: `1px dashed ${LINE}`, borderRadius: 10 } }, "No extinguishers in this building yet.")));
+    return React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
+        React.createElement(FontImport, null),
+        React.createElement(TopBanner, null),
+        React.createElement("div", { style: { maxWidth: 1180, margin: "0 auto", padding: "28px 20px 60px", position: "relative" } },
+            header,
+            error && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, marginBottom: 16, fontSize: 13 } }, error),
+            selectedBuilding ? buildingGrid : buildingsTable),
+        selected && React.createElement(FafaDetailDrawer, {
+            item: selected, log, buildings,
+            onClose: () => setSelected(null),
+            onSignoff: (testType) => setSignoffFor({ item: selected, testType }),
+            onReactivate: () => reactivate(selected),
+            onToggleWithdrawn: () => toggleWithdrawn(selected),
+            onEdit: () => setEditFor(selected),
+            onViewQr: () => setQrFor(selected),
+            onRemoveTestType: (testType) => removeTestType(selected, testType),
+            onEditTestType: (testType) => setEditTestTypeFor({ item: selected, testType }),
+        }),
+        showAdd && React.createElement(AddFafaModal, { onCancel: () => setShowAdd(false), onAdd: addFafa, nextId: nextFafaAssetId(extinguishers), buildings, defaultBuilding: selectedBuilding }),
+        editFor && React.createElement(EditFafaModal, { item: editFor, buildings, onCancel: () => setEditFor(null), onSave: (updates) => editFafa(editFor, updates) }),
+        signoffFor && React.createElement(FafaSignoffModal, { item: signoffFor.item, testType: signoffFor.testType, onCancel: () => setSignoffFor(null), onSubmit: submitSignoff }),
+        editTestTypeFor && React.createElement(EditTestTypeModal, { equipment: editTestTypeFor.item, testType: editTestTypeFor.testType, onCancel: () => setEditTestTypeFor(null), onSave: (updates) => updateTestType(editTestTypeFor.item, editTestTypeFor.testType.id, updates) }),
+        showManageBuildings && React.createElement(ManageFafaBuildingsModal, { buildings, extinguishers, onCancel: () => setShowManageBuildings(false), onSave: (next) => { persistBuildings(next); setShowManageBuildings(false); } }),
+        qrFor && React.createElement(QrModal, { item: qrFor, onClose: () => setQrFor(null) }));
+}
+
 function PersonalInfoModule({ onBack }) {
     const [people, setPeople] = useState(null);
     const [ready, setReady] = useState(false);
