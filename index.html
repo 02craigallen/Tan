@@ -31177,6 +31177,7 @@ function EMSModule({ onBack }) {
     const [categories, setCategories] = useState(null);
     const [showManageCategories, setShowManageCategories] = useState(false);
     const [editTestTypeFor, setEditTestTypeFor] = useState(null); // { equipment, testType }
+    const [editUnitFor, setEditUnitFor] = useState(null); // { equipment, unit }
     useEffect(() => {
         (async () => {
             try {
@@ -31390,6 +31391,11 @@ function EMSModule({ onBack }) {
         persistEquipment(next);
         setSelected((s) => (s ? next.find((e) => e.id === s.id) : s));
     }
+    function updateUnit(eq, unitId, updates) {
+        const next = equipment.map((e) => e.id === eq.id ? { ...e, units: e.units.map((u) => (u.id === unitId ? { ...u, ...updates } : u)) } : e);
+        persistEquipment(next);
+        setSelected((s) => (s ? next.find((e) => e.id === s.id) : s));
+    }
     const filtered = useMemo(() => {
         if (!equipment)
             return [];
@@ -31467,10 +31473,14 @@ function EMSModule({ onBack }) {
                             });
                         } }))),
                     filtered.length === 0 && (React.createElement("div", { style: { gridColumn: "1/-1", padding: 40, textAlign: "center", color: MUTED, border: `1px dashed ${LINE}`, borderRadius: 10 } }, "Nothing matches. Adjust the filters, or add a new item to the register.")))))),
-        selected && (React.createElement(DetailDrawer, { item: selected, log: log.filter((l) => l.equipmentId === selected.id), onClose: () => setSelected(null), onSignoff: (testType, unit) => setSignoffFor({ equipment: selected, testType, unit }), onReactivate: () => reactivate(selected), onViewQr: (target) => setQrFor(target || selected), onToggleWithdrawn: () => toggleWithdrawn(selected), onPhotoChange: (photo) => updatePhoto(selected, photo), onRemoveTestType: (testType) => removeTestType(selected, testType), onEditTestType: (testType) => setEditTestTypeFor({ equipment: selected, testType }) })),
+        selected && (React.createElement(DetailDrawer, { item: selected, log: log.filter((l) => l.equipmentId === selected.id), onClose: () => setSelected(null), onSignoff: (testType, unit) => setSignoffFor({ equipment: selected, testType, unit }), onReactivate: () => reactivate(selected), onViewQr: (target) => setQrFor(target || selected), onToggleWithdrawn: () => toggleWithdrawn(selected), onPhotoChange: (photo) => updatePhoto(selected, photo), onRemoveTestType: (testType) => removeTestType(selected, testType), onEditTestType: (testType) => setEditTestTypeFor({ equipment: selected, testType }), onEditUnit: (unit) => setEditUnitFor({ equipment: selected, unit }) })),
         editTestTypeFor && (React.createElement(EditTestTypeModal, { equipment: editTestTypeFor.equipment, testType: editTestTypeFor.testType, onCancel: () => setEditTestTypeFor(null), onSave: (updates) => {
                 updateTestType(editTestTypeFor.equipment, editTestTypeFor.testType.id, updates);
                 setEditTestTypeFor(null);
+            } })),
+        editUnitFor && (React.createElement(EditUnitModal, { equipment: editUnitFor.equipment, unit: editUnitFor.unit, onCancel: () => setEditUnitFor(null), onSave: (updates) => {
+                updateUnit(editUnitFor.equipment, editUnitFor.unit.id, updates);
+                setEditUnitFor(null);
             } })),
         signoffFor && (React.createElement(SignoffModal, { equipment: signoffFor.equipment, testType: signoffFor.testType, unit: signoffFor.unit, onCancel: () => setSignoffFor(null), onSubmit: submitSignoff })),
         showAdd && (React.createElement(AddEquipmentModal, { onCancel: () => setShowAdd(false), onAdd: addEquipment, nextId: equipment ? nextAssetId(equipment) : "EQ-0001", categories: categories || CATEGORIES })),
@@ -31824,7 +31834,7 @@ function TagCard({ item, categories, onClick, onEdit, selectMode, selected, onTo
             React.createElement(ChevronRight, { size: 16, color: MUTED }))));
 }
 // ---------- detail drawer ----------
-function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, onToggleWithdrawn, onPhotoChange, onRemoveTestType, onEditTestType }) {
+function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, onToggleWithdrawn, onPhotoChange, onRemoveTestType, onEditTestType, onEditUnit }) {
     const [photoBusy, setPhotoBusy] = useState(false);
     async function handlePhotoUpload(e) {
         const file = e.target.files && e.target.files[0];
@@ -31959,7 +31969,7 @@ function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, o
                                 React.createElement(Pencil, { size: 12 })),
                             React.createElement("button", { onClick: () => onRemoveTestType(t), title: "Remove this test type", style: { background: "none", border: `1px solid ${LINE}`, color: MUTED, padding: "6px 9px", borderRadius: 6, display: "flex", alignItems: "center" } },
                                 React.createElement(X, { size: 12 })))))))),
-                React.createElement(UnitsSection, { item: item, onSignoff: onSignoff, onViewUnitQr: onViewQr }))) : (React.createElement("div", { style: { marginTop: 26 } },
+                React.createElement(UnitsSection, { item: item, onSignoff: onSignoff, onViewUnitQr: onViewQr, onEditUnit: onEditUnit }))) : (React.createElement("div", { style: { marginTop: 26 } },
                 React.createElement(SectionLabel, null, "Test types"),
                 React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginTop: 10 } }, item.testTypes.map((t) => {
                     const info = dueInfo(t);
@@ -32041,7 +32051,7 @@ function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, o
                             l.notes,
                             "\"")))))))));
 }
-function UnitsSection({ item, onSignoff, onViewUnitQr }) {
+function UnitsSection({ item, onSignoff, onViewUnitQr, onEditUnit }) {
     const [expandedId, setExpandedId] = useState(null);
     const [unitQuery, setUnitQuery] = useState("");
     const units = item.units.filter((u) => u.label.toLowerCase().includes(unitQuery.toLowerCase()) || (u.otherNo || "").toLowerCase().includes(unitQuery.toLowerCase()));
@@ -32080,20 +32090,33 @@ function UnitsSection({ item, onSignoff, onViewUnitQr }) {
                                 u.otherNo && React.createElement("div", { style: { fontSize: 11.5, color: MUTED, fontFamily: MONO_FONT } }, u.otherNo))),
                         React.createElement(ChevronRight, { size: 16, color: MUTED, style: { transform: isOpen ? "rotate(90deg)" : "none" } })),
                     isOpen && (React.createElement("div", { style: { borderTop: `1px solid ${LINE}`, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 10 } },
-                        React.createElement("button", { onClick: () => onViewUnitQr({ assetId: unitCode, name: `${item.name} · ${u.label}` }), style: {
-                                alignSelf: "flex-start",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                background: "none",
-                                border: `1px solid ${LINE}`,
-                                color: INK,
-                                padding: "5px 10px",
-                                borderRadius: 20,
-                                fontSize: 12,
-                            } },
-                            React.createElement(QrCode, { size: 12 }),
-                            " View QR for this unit"),
+                        React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+                            React.createElement("button", { onClick: () => onViewUnitQr({ assetId: unitCode, name: `${item.name} · ${u.label}` }), style: {
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    background: "none",
+                                    border: `1px solid ${LINE}`,
+                                    color: INK,
+                                    padding: "5px 10px",
+                                    borderRadius: 20,
+                                    fontSize: 12,
+                                } },
+                                React.createElement(QrCode, { size: 12 }),
+                                " View QR for this unit"),
+                            React.createElement("button", { onClick: () => onEditUnit(u), title: "Edit this unit's label / serial number", style: {
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    background: "none",
+                                    border: `1px solid ${LINE}`,
+                                    color: INK,
+                                    padding: "5px 10px",
+                                    borderRadius: 20,
+                                    fontSize: 12,
+                                } },
+                                React.createElement(Pencil, { size: 12 }),
+                                " Edit")),
                         rows.map(({ testType, info }) => {
                             const color = info.state === "overdue" ? RED : info.state === "soon" ? AMBER : MUTED;
                             return (React.createElement("div", { key: testType.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 } },
@@ -32164,6 +32187,18 @@ function EditTestTypeModal({ equipment, testType, onCancel, onSave }) {
             React.createElement("input", { type: "number", min: "1", value: intervalDays, onChange: (e) => setIntervalDays(Number(e.target.value) || 1), style: inputStyle }))),
         React.createElement(ModalActions, { onCancel: onCancel },
             React.createElement("button", { disabled: !canSave, onClick: () => onSave({ name: name.trim(), intervalDays }), style: { ...primaryBtn, opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" } }, "Save changes"))));
+}
+function EditUnitModal({ equipment, unit, onCancel, onSave }) {
+    const [label, setLabel] = useState(unit.label);
+    const [otherNo, setOtherNo] = useState(unit.otherNo || "");
+    const canSave = label.trim().length > 0;
+    return (React.createElement(ModalShell, { title: "Edit unit", subtitle: equipment.name, onCancel: onCancel },
+        React.createElement(Field, { label: "Label" },
+            React.createElement("input", { value: label, onChange: (e) => setLabel(e.target.value), style: inputStyle })),
+        React.createElement(Field, { label: "Serial / other number" },
+            React.createElement("input", { value: otherNo, onChange: (e) => setOtherNo(e.target.value), style: { ...inputStyle, fontFamily: MONO_FONT } })),
+        React.createElement(ModalActions, { onCancel: onCancel },
+            React.createElement("button", { disabled: !canSave, onClick: () => onSave({ label: label.trim(), otherNo: otherNo.trim() }), style: { ...primaryBtn, opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" } }, "Save changes"))));
 }
 function EditTileModal({ item, categories, onCancel, onSave }) {
     const [name, setName] = useState(item.name);
