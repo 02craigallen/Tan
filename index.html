@@ -30404,6 +30404,25 @@ const categoryLabel = (code, cats = CATEGORIES) => {
     return c ? c.label : code;
 };
 const uid = () => Math.random().toString(36).slice(2, 10);
+const PEOPLE_KEY = "people:list";
+const DEFAULT_PEOPLE = [
+    { id: "seed-combes", name: "FF Combes", payrollNumber: "", rank: "Firefighter", watch: "Red", phone: "", emergencyName: "", emergencyPhone: "" },
+    { id: "seed-ryan", name: "FF Ryan", payrollNumber: "", rank: "Firefighter", watch: "Blue", phone: "", emergencyName: "", emergencyPhone: "" },
+    { id: "seed-pleasants", name: "FF Pleasants", payrollNumber: "", rank: "Firefighter", watch: "Green", phone: "", emergencyName: "", emergencyPhone: "" },
+];
+async function loadPeopleWithSeed() {
+    try {
+        const r = await window.storage.get(PEOPLE_KEY, true);
+        return JSON.parse(r.value);
+    }
+    catch {
+        try {
+            await window.storage.set(PEOPLE_KEY, JSON.stringify(DEFAULT_PEOPLE), true);
+        }
+        catch { /* seeding failed — still hand back defaults for this render */ }
+        return DEFAULT_PEOPLE;
+    }
+}
 function resizeImageFile(file, maxDim = 640, quality = 0.72) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -32424,7 +32443,6 @@ function ModuleCard({ eyebrow, title, desc, icon, color, live, badge, onClick })
             React.createElement(ArrowRight, { size: 14 }))));
 }
 function PersonalInfoModule({ onBack }) {
-    const PEOPLE_KEY = "people:list";
     const [people, setPeople] = useState(null);
     const [ready, setReady] = useState(false);
     const [error, setError] = useState(null);
@@ -32434,15 +32452,7 @@ function PersonalInfoModule({ onBack }) {
     useEffect(() => {
         (async () => {
             try {
-                let list;
-                try {
-                    const r = await window.storage.get(PEOPLE_KEY, true);
-                    list = r ? JSON.parse(r.value) : [];
-                }
-                catch {
-                    list = [];
-                }
-                setPeople(list);
+                setPeople(await loadPeopleWithSeed());
                 setReady(true);
             }
             catch {
@@ -32749,7 +32759,6 @@ function PracticalEntryCard({ entry, onDelete }) {
         entry.files && entry.files.length > 0 && (React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 } }, entry.files.map((f) => React.createElement(EntryFileChip, { key: f.id, file: f }))))));
 }
 function PracticalModule({ onBack }) {
-    const PEOPLE_KEY = "people:list";
     const [people, setPeople] = useState([]);
     const [entries, setEntries] = useState([]);
     const [ready, setReady] = useState(false);
@@ -32767,12 +32776,7 @@ function PracticalModule({ onBack }) {
     useEffect(() => {
         (async () => {
             try {
-                let peopleList = [];
-                try {
-                    const r = await window.storage.get(PEOPLE_KEY, true);
-                    peopleList = r ? JSON.parse(r.value) : [];
-                }
-                catch { peopleList = []; }
+                const peopleList = await loadPeopleWithSeed();
                 let entryList = [];
                 try {
                     const r = await window.storage.get(PRACTICAL_LOG_KEY, true);
@@ -32859,7 +32863,6 @@ function PracticalModule({ onBack }) {
         persist(entries.filter((e) => e.id !== id));
     }
     const formCard = (React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 22, marginTop: 24 } },
-        people.length === 0 && (React.createElement("div", { style: { background: PANEL_RAISED, border: `1px solid ${LINE}`, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: MUTED, marginBottom: 16 } }, "No staff on file yet — add firefighters under Personal Info first.")),
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 } },
             React.createElement(Field, { label: "Firefighter assessed" },
                 React.createElement("select", { value: personId, onChange: (e) => setPersonId(e.target.value), style: inputStyle },
@@ -33059,7 +33062,6 @@ function demoStatus(str) {
     return "green";
 }
 const STATUS_COLOR = { green: GREEN, amber: AMBER, red: RED };
-const DEMO_TEAM = ["FF Combes", "FF Ryan", "FF Pleasants"];
 function TheoryOverviewGrid({ categories, people, expanded, onToggle }) {
     const colWidth = 46;
     const gridStyle = { display: "grid", gridTemplateColumns: `minmax(220px, 2fr) repeat(${people.length}, ${colWidth}px)` };
@@ -33105,7 +33107,6 @@ function TheoryCategorySection({ category, expanded, onToggle }) {
         expanded && React.createElement("div", { style: { padding: "0 16px 8px" } }, category.items.map((item) => React.createElement(TheoryItemRow, { key: item, text: item })))));
 }
 function TheoryModule({ onBack }) {
-    const PEOPLE_KEY = "people:list";
     const [expanded, setExpanded] = useState({});
     const [query, setQuery] = useState("");
     const [viewMode, setViewMode] = useState("single");
@@ -33113,15 +33114,14 @@ function TheoryModule({ onBack }) {
     useEffect(() => {
         (async () => {
             try {
-                const r = await window.storage.get(PEOPLE_KEY, true);
-                setPeople(r ? JSON.parse(r.value) : []);
+                setPeople(await loadPeopleWithSeed());
             }
             catch {
                 setPeople([]);
             }
         })();
     }, []);
-    const overviewPeople = people && people.length > 0 ? people.map((p) => ({ id: p.id, name: p.name })) : DEMO_TEAM.map((n) => ({ id: n, name: n }));
+    const overviewPeople = (people || []).map((p) => ({ id: p.id, name: p.name }));
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
         if (!q)
@@ -33165,7 +33165,6 @@ function TheoryModule({ onBack }) {
             React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 16, background: PANEL_RAISED, border: `1px solid ${LINE}`, borderRadius: 8, padding: 4, width: "fit-content" } },
                 React.createElement("button", { onClick: () => setViewMode("single"), style: { background: viewMode === "single" ? PANEL : "none", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 13, fontWeight: 600, color: viewMode === "single" ? INK : MUTED, cursor: "pointer" } }, "My view"),
                 React.createElement("button", { onClick: () => setViewMode("overview"), style: { background: viewMode === "overview" ? PANEL : "none", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 13, fontWeight: 600, color: viewMode === "overview" ? INK : MUTED, cursor: "pointer" } }, "Team overview")),
-            viewMode === "overview" && overviewPeople.length > 0 && people && people.length === 0 && (React.createElement("div", { style: { fontSize: 12.5, color: MUTED, marginBottom: 12 } }, "No staff on file yet, so this is showing three placeholder names (", DEMO_TEAM.join(", "), ") — add real staff under Personal Info and they'll appear here instead.")),
             React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" } },
                 React.createElement("input", { value: query, onChange: (e) => setQuery(e.target.value), placeholder: "Search theory items…", style: { ...inputStyle, maxWidth: 280 } }),
                 React.createElement("button", { onClick: expandAll, style: { background: "none", border: `1px solid ${LINE}`, color: INK, padding: "9px 14px", borderRadius: 6, fontSize: 13 } }, "Expand all"),
