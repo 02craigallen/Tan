@@ -31208,6 +31208,7 @@ function soonestDue(item) {
 const EQUIP_KEY = "ems:equipment";
 const LOG_KEY = "ems:signoff-log";
 const CATEGORIES_KEY = "ems:categories";
+const LOCATIONS_KEY = "ems:locations";
 function EMSModule({ onBack }) {
     const [equipment, setEquipment] = useState(null);
     const [log, setLog] = useState(null);
@@ -31231,6 +31232,8 @@ function EMSModule({ onBack }) {
     const [editFor, setEditFor] = useState(null); // equipment being tile-edited
     const [categories, setCategories] = useState(null);
     const [showManageCategories, setShowManageCategories] = useState(false);
+    const [locations, setLocations] = useState(null);
+    const [showManageLocations, setShowManageLocations] = useState(false);
     const [editTestTypeFor, setEditTestTypeFor] = useState(null); // { equipment, testType }
     const [editUnitFor, setEditUnitFor] = useState(null); // { equipment, unit }
     useEffect(() => {
@@ -31286,9 +31289,29 @@ function EMSModule({ onBack }) {
                         await window.storage.set(CATEGORIES_KEY, JSON.stringify(cats), true);
                     }
                 }
+                let locs;
+                try {
+                    const r = await window.storage.get(LOCATIONS_KEY, true);
+                    locs = r ? JSON.parse(r.value) : null;
+                }
+                catch {
+                    locs = null;
+                }
+                if (!locs) {
+                    locs = LOCATIONS;
+                    await window.storage.set(LOCATIONS_KEY, JSON.stringify(locs), true);
+                }
+                else {
+                    const missingLocs = LOCATIONS.filter((l) => !locs.includes(l));
+                    if (missingLocs.length > 0) {
+                        locs = [...locs, ...missingLocs];
+                        await window.storage.set(LOCATIONS_KEY, JSON.stringify(locs), true);
+                    }
+                }
                 setEquipment(eq);
                 setLog(lg);
                 setCategories(cats);
+                setLocations(locs);
                 setReady(true);
             }
             catch (e) {
@@ -31296,6 +31319,7 @@ function EMSModule({ onBack }) {
                 setEquipment(seedEquipment());
                 setLog([]);
                 setCategories(CATEGORIES);
+                setLocations(LOCATIONS);
                 setReady(true);
             }
         })();
@@ -31304,6 +31328,15 @@ function EMSModule({ onBack }) {
         setCategories(next);
         try {
             await window.storage.set(CATEGORIES_KEY, JSON.stringify(next), true);
+        }
+        catch {
+            setError("Change made, but saving failed — it may not persist.");
+        }
+    }
+    async function persistLocations(next) {
+        setLocations(next);
+        try {
+            await window.storage.set(LOCATIONS_KEY, JSON.stringify(next), true);
         }
         catch {
             setError("Change made, but saving failed — it may not persist.");
@@ -31475,14 +31508,14 @@ function EMSModule({ onBack }) {
             React.createElement(Header, { onAdd: () => setShowAdd(true), onDueToday: () => setShowDueToday(true), dueTodayCount: dueToday.length, onBack: onBack, selectMode: selectMode, onToggleSelectMode: () => {
                     setSelectMode((v) => !v);
                     setSelectedIds(new Set());
-                }, onManageCategories: () => setShowManageCategories(true) }),
+                }, onManageCategories: () => setShowManageCategories(true), onManageLocations: () => setShowManageLocations(true) }),
             React.createElement(LookupBar, { value: lookupId, onChange: (v) => {
                     setLookupId(v);
                     setLookupError("");
                 }, onSubmit: handleLookup, error: lookupError }),
             error && (React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, marginBottom: 16, fontSize: 13 } }, error)),
             !ready ? (React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading equipment register\u2026")) : (React.createElement(React.Fragment, null,
-                React.createElement(Toolbar, { query: query, setQuery: setQuery, locFilter: locFilter, setLocFilter: setLocFilter, catFilter: catFilter, setCatFilter: setCatFilter, statusFilter: statusFilter, setStatusFilter: setStatusFilter, showActiveOnly: showActiveOnly, setShowActiveOnly: setShowActiveOnly, equipment: equipment }),
+                React.createElement(Toolbar, { query: query, setQuery: setQuery, locFilter: locFilter, setLocFilter: setLocFilter, catFilter: catFilter, setCatFilter: setCatFilter, statusFilter: statusFilter, setStatusFilter: setStatusFilter, showActiveOnly: showActiveOnly, setShowActiveOnly: setShowActiveOnly, equipment: equipment, locations: locations || LOCATIONS }),
                 React.createElement("button", { onClick: () => setShowResetConfirm(true), style: { marginTop: 10, background: "none", border: "none", color: MUTED, fontSize: 12, padding: 0, textDecoration: "underline" } }, "Reset register to latest starter data"),
                 selectMode && (React.createElement("div", { style: {
                         marginTop: 16,
@@ -31537,10 +31570,10 @@ function EMSModule({ onBack }) {
                 updateUnit(editUnitFor.equipment, editUnitFor.unit.id, updates);
                 setEditUnitFor(null);
             } })),
-        signoffFor && (React.createElement(SignoffModal, { equipment: signoffFor.equipment, testType: signoffFor.testType, unit: signoffFor.unit, onCancel: () => setSignoffFor(null), onSubmit: submitSignoff })),
-        showAdd && (React.createElement(AddEquipmentModal, { onCancel: () => setShowAdd(false), onAdd: addEquipment, nextId: equipment ? nextAssetId(equipment) : "EQ-0001", categories: categories || CATEGORIES })),
+        signoffFor && (React.createElement(SignoffModal, { equipment: signoffFor.equipment, testType: signoffFor.testType, unit: signoffFor.unit, locations: locations || LOCATIONS, onCancel: () => setSignoffFor(null), onSubmit: submitSignoff })),
+        showAdd && (React.createElement(AddEquipmentModal, { onCancel: () => setShowAdd(false), onAdd: addEquipment, nextId: equipment ? nextAssetId(equipment) : "EQ-0001", categories: categories || CATEGORIES, locations: locations || LOCATIONS })),
         qrFor && React.createElement(QrModal, { item: qrFor, onClose: () => setQrFor(null) }),
-        editFor && (React.createElement(EditTileModal, { item: editFor, categories: categories || CATEGORIES, onCancel: () => setEditFor(null), onSave: (updates) => {
+        editFor && (React.createElement(EditTileModal, { item: editFor, categories: categories || CATEGORIES, locations: locations || LOCATIONS, onCancel: () => setEditFor(null), onSave: (updates) => {
                 const next = equipment.map((e) => (e.id === editFor.id ? { ...e, ...updates } : e));
                 persistEquipment(next);
                 setEditFor(null);
@@ -31551,6 +31584,10 @@ function EMSModule({ onBack }) {
             }, onEditItem: (item) => {
                 setShowManageCategories(false);
                 setEditFor(item);
+            } })),
+        showManageLocations && (React.createElement(ManageLocationsModal, { locations: locations || LOCATIONS, equipment: equipment, onCancel: () => setShowManageLocations(false), onSave: (next) => {
+                persistLocations(next);
+                setShowManageLocations(false);
             } })),
         showResetConfirm && (React.createElement(ModalShell, { title: "Reset register?", onCancel: () => setShowResetConfirm(false) },
             React.createElement("p", { style: { fontSize: 14, color: MUTED, lineHeight: 1.5, marginBottom: 18 } }, "This wipes everything currently in the register and sign-off history in this browser, and replaces it with the latest starter data. Use this after a correction to the equipment list. This can't be undone."),
@@ -31609,7 +31646,7 @@ function TopBanner() {
                 React.createElement("button", { onClick: () => { clearSession(); window.location.reload(); }, style: { background: "none", border: "1px solid rgba(241,236,225,0.35)", color: "#F1ECE1", padding: "6px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" } }, "Log out")))))));
 }
 // ---------- header ----------
-function Header({ onAdd, onDueToday, dueTodayCount, onBack, selectMode, onToggleSelectMode, onManageCategories }) {
+function Header({ onAdd, onDueToday, dueTodayCount, onBack, selectMode, onToggleSelectMode, onManageCategories, onManageLocations }) {
     return (React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6, flexWrap: "wrap", gap: 16 } },
         React.createElement("div", null,
             onBack && (React.createElement("button", { onClick: onBack, style: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: MUTED, fontSize: 13, padding: 0, marginBottom: 10 } },
@@ -31632,6 +31669,20 @@ function Header({ onAdd, onDueToday, dueTodayCount, onBack, selectMode, onToggle
                 } },
                 React.createElement(Pencil, { size: 15 }),
                 " Categories"),
+            React.createElement("button", { onClick: onManageLocations, title: "Manage locations", style: {
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    background: PANEL,
+                    color: INK,
+                    border: `1px solid ${LINE}`,
+                    padding: "10px 14px",
+                    borderRadius: 6,
+                    fontWeight: 600,
+                    fontSize: 14,
+                } },
+                React.createElement(Pencil, { size: 15 }),
+                " Locations"),
             React.createElement("button", { onClick: onToggleSelectMode, style: {
                     display: "flex",
                     alignItems: "center",
@@ -31744,7 +31795,7 @@ function QrModal({ item, onClose }) {
                 " Print tag"))));
 }
 // ---------- toolbar ----------
-function Toolbar({ query, setQuery, locFilter, setLocFilter, catFilter, setCatFilter, statusFilter, setStatusFilter, showActiveOnly, setShowActiveOnly, equipment }) {
+function Toolbar({ query, setQuery, locFilter, setLocFilter, catFilter, setCatFilter, statusFilter, setStatusFilter, showActiveOnly, setShowActiveOnly, equipment, locations }) {
     const counts = {
         total: equipment.length,
         unserviceable: equipment.filter((e) => e.status === "unserviceable").length,
@@ -31770,7 +31821,7 @@ function Toolbar({ query, setQuery, locFilter, setLocFilter, catFilter, setCatFi
                         fontSize: 14,
                         outline: "none",
                     } })),
-            React.createElement(Select, { value: locFilter, onChange: setLocFilter, options: ["All", ...LOCATIONS] }),
+            React.createElement(Select, { value: locFilter, onChange: setLocFilter, options: ["All", ...(locations || LOCATIONS)] }),
             React.createElement(Select, { value: catFilter, onChange: setCatFilter, options: ["All", ...CATEGORIES.map((c) => c.code)], renderLabel: (v) => (v === "All" ? "All categories" : `${v} — ${categoryLabel(v)}`) }),
             React.createElement(Select, { value: statusFilter, onChange: setStatusFilter, options: ["All", "serviceable", "unserviceable"], labelize: true }),
             React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: MUTED, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 6, padding: "0 12px" } },
@@ -32193,7 +32244,8 @@ function SectionLabel({ children, icon }) {
         children));
 }
 // ---------- sign-off modal ----------
-function SignoffModal({ equipment, testType, unit, onCancel, onSubmit }) {
+function SignoffModal({ equipment, testType, unit, locations, onCancel, onSubmit }) {
+    const locList = locations || LOCATIONS;
     const [status, setStatus] = useState("serviceable");
     const [signedBy, setSignedBy] = useState("");
     const [location, setLocation] = useState(equipment.location);
@@ -32215,7 +32267,7 @@ function SignoffModal({ equipment, testType, unit, onCancel, onSubmit }) {
                     textTransform: "capitalize",
                 } }, s))))),
         React.createElement(Field, { label: "Location" },
-            React.createElement("select", { value: location, onChange: (e) => setLocation(e.target.value), style: inputStyle }, LOCATIONS.map((l) => (React.createElement("option", { key: l, value: l }, l))))),
+            React.createElement("select", { value: location, onChange: (e) => setLocation(e.target.value), style: inputStyle }, locList.map((l) => (React.createElement("option", { key: l, value: l }, l))))),
         React.createElement(Field, { label: "Notes (optional)" },
             React.createElement("textarea", { value: notes, onChange: (e) => setNotes(e.target.value), rows: 3, placeholder: "Anything worth flagging\u2026", style: { ...inputStyle, resize: "vertical" } })),
         React.createElement(ModalActions, { onCancel: onCancel },
@@ -32259,7 +32311,8 @@ function EditUnitModal({ equipment, unit, onCancel, onSave }) {
         React.createElement(ModalActions, { onCancel: onCancel },
             React.createElement("button", { disabled: !canSave, onClick: () => onSave({ label: label.trim(), otherNo: otherNo.trim() }), style: { ...primaryBtn, opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" } }, "Save changes"))));
 }
-function EditTileModal({ item, categories, onCancel, onSave }) {
+function EditTileModal({ item, categories, locations, onCancel, onSave }) {
+    const locList = locations || LOCATIONS;
     const [name, setName] = useState(item.name);
     const [category, setCategory] = useState(item.category);
     const [location, setLocation] = useState(item.location);
@@ -32276,7 +32329,7 @@ function EditTileModal({ item, categories, onCancel, onSave }) {
                 " \u2014 ",
                 c.label))))),
         React.createElement(Field, { label: "Location" },
-            React.createElement("select", { value: location, onChange: (e) => setLocation(e.target.value), style: inputStyle }, LOCATIONS.map((l) => (React.createElement("option", { key: l, value: l }, l))))),
+            React.createElement("select", { value: location, onChange: (e) => setLocation(e.target.value), style: inputStyle }, locList.map((l) => (React.createElement("option", { key: l, value: l }, l))))),
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
             React.createElement(Field, { label: "Serial no." },
                 React.createElement("input", { value: serialNo, onChange: (e) => setSerialNo(e.target.value), style: inputStyle })),
@@ -32363,12 +32416,70 @@ function ManageCategoriesModal({ categories, equipment, onCancel, onSave, onEdit
         React.createElement(ModalActions, { onCancel: onCancel },
             React.createElement("button", { onClick: () => onSave(draft), style: primaryBtn }, "Save changes"))));
 }
-function AddEquipmentModal({ onCancel, onAdd, nextId, categories }) {
+function LocationRow({ loc, inUse, onRemove }) {
+    const count = React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 2 } }, `${inUse} item${inUse !== 1 ? "s" : ""}`);
+    return React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", border: `1px solid ${LINE}`, borderRadius: 8, padding: "8px 12px" } },
+        React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 14, fontWeight: 600 } }, loc),
+            inUse > 0 && count),
+        React.createElement("button", { onClick: onRemove, disabled: inUse > 0, title: inUse > 0 ? "Move equipment out of this location first" : "Remove", style: {
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: "none",
+                border: `1px solid ${inUse > 0 ? LINE : RED}`,
+                color: inUse > 0 ? MUTED : RED,
+                padding: "6px 10px",
+                borderRadius: 6,
+                fontSize: 12.5,
+                cursor: inUse > 0 ? "not-allowed" : "pointer",
+                opacity: inUse > 0 ? 0.6 : 1,
+            } },
+            React.createElement(Trash2, { size: 13 }),
+            " Remove"));
+}
+function ManageLocationsModal({ locations, equipment, onCancel, onSave }) {
+    const [draft, setDraft] = useState([...locations]);
+    const [newLocation, setNewLocation] = useState("");
+    const [error, setError] = useState("");
+    function countInUse(loc) {
+        return (equipment || []).filter((e) => e.location === loc).length;
+    }
+    function addLocation() {
+        const trimmed = newLocation.trim();
+        if (!trimmed) return;
+        if (draft.some((l) => l.toLowerCase() === trimmed.toLowerCase())) {
+            setError(`"${trimmed}" already exists.`);
+            return;
+        }
+        setDraft([...draft, trimmed]);
+        setNewLocation("");
+        setError("");
+    }
+    function removeLocation(loc) {
+        if (countInUse(loc) > 0) return;
+        setDraft(draft.filter((l) => l !== loc));
+    }
+    const rows = draft.map((loc) => React.createElement(LocationRow, { key: loc, loc, inUse: countInUse(loc), onRemove: () => removeLocation(loc) }));
+    return (React.createElement(ModalShell, { title: "Manage locations", onCancel: onCancel },
+        React.createElement("div", { style: { fontSize: 12.5, color: MUTED, marginBottom: 14 } }, "Add or remove locations equipment can be assigned to. A location in use by equipment can't be removed until nothing points to it."),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, maxHeight: "50vh", overflowY: "auto" } }, rows),
+        error && React.createElement("div", { style: { color: RED, fontSize: 12.5, marginTop: 10 } }, error),
+        React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 14 } },
+            React.createElement("input", { value: newLocation, onChange: (e) => { setNewLocation(e.target.value); setError(""); }, placeholder: "New location name", style: { ...inputStyle, flex: 1 }, onKeyDown: (e) => { if (e.key === "Enter") { e.preventDefault(); addLocation(); } } }),
+            React.createElement("button", { onClick: addLocation, style: { display: "flex", alignItems: "center", gap: 6, background: PANEL_RAISED, border: `1px solid ${LINE}`, color: INK, padding: "9px 14px", borderRadius: 6, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" } },
+                React.createElement(Plus, { size: 14 }),
+                " Add")),
+        React.createElement(ModalActions, { onCancel: onCancel },
+            React.createElement("button", { onClick: () => onSave(draft), style: primaryBtn }, "Save changes"))));
+}
+function AddEquipmentModal({ onCancel, onAdd, nextId, categories, locations }) {
     const catList = categories || CATEGORIES;
+    const locList = locations || LOCATIONS;
     const [assetId, setAssetId] = useState(nextId);
     const [name, setName] = useState("");
     const [category, setCategory] = useState(catList[0].code);
-    const [location, setLocation] = useState(LOCATIONS[0]);
+    const [location, setLocation] = useState(locList[0]);
     const [entryDate, setEntryDate] = useState(todayISO());
     const [serialNo, setSerialNo] = useState("");
     const [otherNo, setOtherNo] = useState("");
@@ -32416,7 +32527,7 @@ function AddEquipmentModal({ onCancel, onAdd, nextId, categories }) {
                 React.createElement("input", { type: "file", accept: "image/*", onChange: handlePhotoChange, style: { fontSize: 13 } })),
             photoBusy && React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 4 } }, "Processing photo\u2026")),
         React.createElement(Field, { label: "Location" },
-            React.createElement("select", { value: location, onChange: (e) => setLocation(e.target.value), style: inputStyle }, LOCATIONS.map((l) => (React.createElement("option", { key: l, value: l }, l))))),
+            React.createElement("select", { value: location, onChange: (e) => setLocation(e.target.value), style: inputStyle }, locList.map((l) => (React.createElement("option", { key: l, value: l }, l))))),
         React.createElement(Field, { label: "Test types" },
             React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
                 tests.map((t, i) => (React.createElement("div", { key: i, style: { display: "flex", gap: 8 } },
