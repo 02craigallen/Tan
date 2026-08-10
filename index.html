@@ -32339,16 +32339,27 @@ function SectionLabel({ children, icon }) {
         children));
 }
 // ---------- sign-off modal ----------
+function SignedByField({ value, onChange }) {
+    const [editing, setEditing] = useState(!value);
+    if (!editing) {
+        return React.createElement("div", { style: { ...inputStyle, display: "flex", alignItems: "center", justifyContent: "space-between" } },
+            React.createElement("span", null, value),
+            React.createElement("button", { type: "button", onClick: () => setEditing(true), title: "Not you? Change this", style: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: MUTED, fontSize: 12, padding: 0, cursor: "pointer" } },
+                React.createElement(Pencil, { size: 13 }),
+                " Not you?"));
+    }
+    return React.createElement("input", { value, onChange: (e) => onChange(e.target.value), autoFocus: true, placeholder: "Your name", style: inputStyle });
+}
 function SignoffModal({ equipment, testType, unit, locations, onCancel, onSubmit }) {
     const locList = locations || LOCATIONS;
     const [status, setStatus] = useState("serviceable");
-    const [signedBy, setSignedBy] = useState("");
+    const [signedBy, setSignedBy] = useState(() => (currentUser && currentUser.name) || "");
     const [location, setLocation] = useState(equipment.location);
     const [notes, setNotes] = useState("");
     const canSubmit = signedBy.trim().length > 0;
     return (React.createElement(ModalShell, { title: `Sign off · ${testType.name}`, subtitle: unit ? `${equipment.name} · ${unit.label}` : equipment.name, onCancel: onCancel },
         React.createElement(Field, { label: "Signed off by" },
-            React.createElement("input", { value: signedBy, onChange: (e) => setSignedBy(e.target.value), placeholder: "Your name", style: inputStyle })),
+            React.createElement(SignedByField, { value: signedBy, onChange: setSignedBy })),
         React.createElement(Field, { label: "Status" },
             React.createElement("div", { style: { display: "flex", gap: 8 } }, ["serviceable", "unserviceable"].map((s) => (React.createElement("button", { key: s, onClick: () => setStatus(s), style: {
                     flex: 1,
@@ -32898,7 +32909,7 @@ function EditFafaModal({ item, buildings, onCancel, onSave }) {
 }
 function FafaSignoffModal({ item, testType, onCancel, onSubmit }) {
     const [status, setStatus] = useState("serviceable");
-    const [signedBy, setSignedBy] = useState("");
+    const [signedBy, setSignedBy] = useState(() => (currentUser && currentUser.name) || "");
     const [notes, setNotes] = useState("");
     const canSubmit = signedBy.trim().length > 0;
     const statusBtns = ["serviceable", "unserviceable"].map((s) => React.createElement("button", { key: s, onClick: () => setStatus(s), style: {
@@ -32914,7 +32925,7 @@ function FafaSignoffModal({ item, testType, onCancel, onSubmit }) {
         } }, s));
     return (React.createElement(ModalShell, { title: `Sign off · ${testType.name}`, subtitle: `${item.assetId} · ${item.building}`, onCancel: onCancel },
         React.createElement(Field, { label: "Signed off by" },
-            React.createElement("input", { value: signedBy, onChange: (e) => setSignedBy(e.target.value), placeholder: "Your name", style: inputStyle })),
+            React.createElement(SignedByField, { value: signedBy, onChange: setSignedBy })),
         React.createElement(Field, { label: "Status" },
             React.createElement("div", { style: { display: "flex", gap: 8 } }, statusBtns)),
         React.createElement(Field, { label: "Notes (optional)" },
