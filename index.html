@@ -32724,6 +32724,217 @@ function CalendarModule({ onBack }) {
 const PRACTICAL_LOG_KEY = "practical:activity-log";
 const ACTIVITY_TYPES = ["Training", "Incident"];
 const ASSESSMENT_METHODS = ["Observation", "Personal Statement", "Verbal Q&A", "Witness Statement", "Docs and Records"];
+// Only the two units below have real elements transcribed so far — the rest of the
+// ~14 units (Pump/Monitor Operations, Drivers, Watchroom, etc.) still need their
+// element lists sent over before they can be added here.
+const PRACTICAL_UNITS = [
+    { key: "operational-tactics", name: "Operational Tactics & Functions", elements: [
+        "Firefighter branch handler - sideline", "Firefighter secondary media", "First aid",
+        "Local standby duties", "Respond to incident", "Hazmat operative", "Rescue tool operative",
+    ] },
+    { key: "ba-wearer", name: "BA Wearer", elements: [
+        "BA Wearer Search & Rescue", "BA Heat & Smoke (+ record BA search & rescue role?)",
+        "BA Wearer Team Leader (+ record BA heat & smoke and/or search & rescue role?)", "BA Entry Control",
+    ] },
+];
+const PRACTICAL_ASSESSMENTS_KEY = "practical:assessments";
+const ELEMENT_STATUSES = ["met", "needs-work", "not-completed"];
+const ELEMENT_STATUS_LABEL = { met: "Met", "needs-work": "Needs Work", "not-completed": "Not Completed" };
+const ELEMENT_STATUS_COLOR = { met: GREEN, "needs-work": AMBER, "not-completed": RED };
+function nextElementStatus(current) {
+    const idx = ELEMENT_STATUSES.indexOf(current);
+    if (idx === ELEMENT_STATUSES.length - 1)
+        return null;
+    return ELEMENT_STATUSES[idx + 1];
+}
+function ElementStatusCell({ status, onClick }) {
+    return React.createElement("button", { onClick, title: status ? ELEMENT_STATUS_LABEL[status] : "Not yet assessed — click to set", style: {
+            width: "100%", minHeight: 38, border: `1px solid ${LINE}`, borderRadius: 4, cursor: "pointer",
+            background: status ? ELEMENT_STATUS_COLOR[status] : PANEL_RAISED, color: status ? "#fff" : MUTED,
+            fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3,
+        } }, status ? ELEMENT_STATUS_LABEL[status] : "—");
+}
+function ElementResultsGrid({ unit, people, results, onCycle }) {
+    const colWidth = 150;
+    const items = [];
+    items.push(React.createElement("div", { key: "corner", style: { position: "sticky", left: 0, top: 0, zIndex: 2, background: PANEL, borderBottom: `1px solid ${LINE}`, padding: "10px 12px", fontWeight: 600, fontSize: 12.5, color: MUTED } }, "Element"));
+    people.forEach((p) => {
+        items.push(React.createElement("div", { key: "h-" + p.id, style: { position: "sticky", top: 0, zIndex: 1, background: PANEL, borderBottom: `1px solid ${LINE}`, borderLeft: `1px solid ${LINE}`, padding: "10px 8px", fontWeight: 600, fontSize: 12.5, textAlign: "center" } }, p.name));
+    });
+    unit.elements.forEach((el, i) => {
+        items.push(React.createElement("div", { key: "el-" + i, style: { position: "sticky", left: 0, background: PANEL, borderBottom: `1px solid ${LINE}`, padding: "10px 12px", fontSize: 13 } }, el));
+        people.forEach((p) => {
+            const status = results[p.id] && results[p.id][i];
+            items.push(React.createElement("div", { key: "cell-" + i + "-" + p.id, style: { borderBottom: `1px solid ${LINE}`, borderLeft: `1px solid ${LINE}`, padding: 4 } },
+                React.createElement(ElementStatusCell, { status, onClick: () => onCycle(p.id, i) })));
+        });
+    });
+    return React.createElement("div", { style: { border: `1px solid ${LINE}`, borderRadius: 10, overflow: "auto", maxHeight: "60vh" } },
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: `minmax(200px, 2fr) repeat(${people.length}, ${colWidth}px)` } }, items));
+}
+function AssessmentHistoryCard({ record, onDelete }) {
+    return React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: "14px 16px" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
+            React.createElement("div", null,
+                React.createElement("div", { style: { fontWeight: 600, fontSize: 14.5 } }, record.unitName),
+                React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 2 } }, fmt(record.date), " · assessed by ", record.assessedBy)),
+            React.createElement("button", { onClick: () => onDelete(record.id), style: { background: "none", border: "none", color: MUTED, cursor: "pointer", display: "flex" } },
+                React.createElement(Trash2, { size: 15 }))),
+        React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 } }, record.methods.map((m) => React.createElement("span", { key: m, style: { fontSize: 11, background: PANEL_RAISED, border: `1px solid ${LINE}`, borderRadius: 20, padding: "3px 9px", color: MUTED } }, m))),
+        record.notes && React.createElement("div", { style: { fontSize: 13.5, marginTop: 10, lineHeight: 1.5 } }, record.notes),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, marginTop: 12 } }, record.people.map((p) => {
+            const met = p.results.filter((r) => r.status === "met").length;
+            const needsWork = p.results.filter((r) => r.status === "needs-work").length;
+            const notDone = p.results.filter((r) => r.status === "not-completed").length;
+            return React.createElement("div", { key: p.personId, style: { fontSize: 13, display: "flex", justifyContent: "space-between", background: PANEL_RAISED, border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 10px" } },
+                React.createElement("span", null, p.personName),
+                React.createElement("span", { style: { color: MUTED, fontSize: 12 } }, met, " met · ", needsWork, " needs work · ", notDone, " not completed"));
+        })));
+}
+function PracticalAssessmentFlow({ people }) {
+    const [ready, setReady] = useState(false);
+    const [assessments, setAssessments] = useState([]);
+    const [saveError, setSaveError] = useState(null);
+    const [step, setStep] = useState(1);
+    const [selectedPeople, setSelectedPeople] = useState([]);
+    const [methods, setMethods] = useState([]);
+    const [date, setDate] = useState(todayISO());
+    const [assessedBy, setAssessedBy] = useState("");
+    const [notes, setNotes] = useState("");
+    const [unitKey, setUnitKey] = useState("");
+    const [results, setResults] = useState({});
+    useEffect(() => {
+        (async () => {
+            try {
+                const r = await window.storage.get(PRACTICAL_ASSESSMENTS_KEY, true);
+                setAssessments(r ? JSON.parse(r.value) : []);
+            }
+            catch { /* no assessments saved yet */ }
+            setReady(true);
+        })();
+    }, []);
+    async function persist(next) {
+        setAssessments(next);
+        try {
+            await window.storage.set(PRACTICAL_ASSESSMENTS_KEY, JSON.stringify(next), true);
+            setSaveError(null);
+        }
+        catch {
+            setSaveError("Storage is full, so this assessment couldn't be saved.");
+        }
+    }
+    function togglePerson(id) {
+        setSelectedPeople((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+    }
+    function toggleMethod(m) {
+        setMethods((prev) => prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]);
+    }
+    function cycleResult(personId, elementIndex) {
+        setResults((prev) => {
+            const personResults = { ...(prev[personId] || {}) };
+            const next = nextElementStatus(personResults[elementIndex]);
+            if (next === null)
+                delete personResults[elementIndex];
+            else
+                personResults[elementIndex] = next;
+            return { ...prev, [personId]: personResults };
+        });
+    }
+    const canProceed = selectedPeople.length > 0 && methods.length > 0 && date && assessedBy.trim().length > 0;
+    const unit = PRACTICAL_UNITS.find((u) => u.key === unitKey);
+    const hasAnyResult = Object.values(results).some((r) => Object.keys(r).length > 0);
+    const canSave = !!unit && hasAnyResult;
+    function saveAssessment() {
+        if (!canSave)
+            return;
+        const record = {
+            id: uid(),
+            unitKey,
+            unitName: unit.name,
+            date,
+            assessedBy: assessedBy.trim(),
+            methods: [...methods],
+            notes: notes.trim(),
+            people: selectedPeople.map((pid) => {
+                const person = people.find((p) => p.id === pid);
+                const personResults = results[pid] || {};
+                return {
+                    personId: pid,
+                    personName: person ? person.name : "Unknown",
+                    results: unit.elements.map((el, i) => ({ element: el, status: personResults[i] || null })),
+                };
+            }),
+            createdAt: new Date().toISOString(),
+        };
+        persist([record, ...assessments]);
+        setStep(1);
+        setSelectedPeople([]);
+        setMethods([]);
+        setDate(todayISO());
+        setNotes("");
+        setUnitKey("");
+        setResults({});
+    }
+    function deleteAssessment(id) {
+        if (!window.confirm("Remove this assessment? This can't be undone."))
+            return;
+        persist(assessments.filter((a) => a.id !== id));
+    }
+    const step1Card = (React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 22, marginTop: 24 } },
+        React.createElement(Field, { label: "Who's being assessed (select one or more)" },
+            people.length === 0
+                ? React.createElement("div", { style: { fontSize: 13, color: MUTED } }, "No staff on file yet.")
+                : React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 8 } }, people.map((p) => {
+                    const active = selectedPeople.includes(p.id);
+                    return React.createElement("label", { key: p.id, style: { display: "flex", alignItems: "center", gap: 6, fontSize: 13, background: active ? "#EDE7F6" : PANEL_RAISED, border: `1px solid ${active ? "#6B5B95" : LINE}`, borderRadius: 20, padding: "6px 12px", cursor: "pointer" } },
+                        React.createElement("input", { type: "checkbox", checked: active, onChange: () => togglePerson(p.id), style: { margin: 0 } }),
+                        p.name);
+                }))),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 4 } },
+            React.createElement(Field, { label: "Date" },
+                React.createElement("input", { type: "date", value: date, onChange: (e) => setDate(e.target.value), style: inputStyle })),
+            React.createElement(Field, { label: "Assessed by" },
+                React.createElement("input", { value: assessedBy, onChange: (e) => setAssessedBy(e.target.value), placeholder: "Your name", style: inputStyle }))),
+        React.createElement(Field, { label: "Assessment method(s)" },
+            React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 8 } }, ASSESSMENT_METHODS.map((m) => {
+                const active = methods.includes(m);
+                return React.createElement("label", { key: m, style: { display: "flex", alignItems: "center", gap: 6, fontSize: 13, background: active ? "#FBEFD9" : PANEL_RAISED, border: `1px solid ${active ? AMBER : LINE}`, borderRadius: 20, padding: "6px 12px", cursor: "pointer" } },
+                    React.createElement("input", { type: "checkbox", checked: active, onChange: () => toggleMethod(m), style: { margin: 0 } }),
+                    m);
+            }))),
+        React.createElement(Field, { label: "Notes (optional)" },
+            React.createElement("textarea", { value: notes, onChange: (e) => setNotes(e.target.value), rows: 3, placeholder: "Context for this assessment session…", style: { ...inputStyle, resize: "vertical", fontFamily: BODY_FONT } })),
+        React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", marginTop: 8 } },
+            React.createElement("button", { disabled: !canProceed, onClick: () => setStep(2), style: { ...primaryBtn, background: AMBER, opacity: canProceed ? 1 : 0.5, cursor: canProceed ? "pointer" : "not-allowed" } }, "Next: choose elements"))));
+    const step2Card = (React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 22, marginTop: 24 } },
+        React.createElement("button", { onClick: () => setStep(1), style: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: MUTED, fontSize: 13, padding: 0, marginBottom: 16 } },
+            React.createElement(ChevronLeft, { size: 14 }),
+            " Back to who / how"),
+        React.createElement(Field, { label: "Unit" },
+            React.createElement("select", { value: unitKey, onChange: (e) => setUnitKey(e.target.value), style: { ...inputStyle, maxWidth: 380 } },
+                React.createElement("option", { value: "" }, "Select a unit…"),
+                PRACTICAL_UNITS.map((u) => React.createElement("option", { key: u.key, value: u.key }, u.name)))),
+        unit && React.createElement(React.Fragment, null,
+            React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 14, fontSize: 12.5, color: MUTED, margin: "14px 0" } },
+                React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 5 } }, React.createElement("span", { style: { width: 12, height: 12, borderRadius: 3, background: GREEN, display: "inline-block" } }), "Met"),
+                React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 5 } }, React.createElement("span", { style: { width: 12, height: 12, borderRadius: 3, background: AMBER, display: "inline-block" } }), "Needs work"),
+                React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 5 } }, React.createElement("span", { style: { width: 12, height: 12, borderRadius: 3, background: RED, display: "inline-block" } }), "Not completed"),
+                React.createElement("span", null, "Click a cell to cycle through statuses.")),
+            React.createElement(ElementResultsGrid, { unit, people: people.filter((p) => selectedPeople.includes(p.id)), results, onCycle: cycleResult }),
+            saveError && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, margin: "16px 0", fontSize: 13 } }, saveError),
+            React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", marginTop: 16 } },
+                React.createElement("button", { disabled: !canSave, onClick: saveAssessment, style: { ...primaryBtn, background: AMBER, opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" } }, "Save assessment")))));
+    return (React.createElement(React.Fragment, null,
+        !ready
+            ? React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading…")
+            : React.createElement(React.Fragment, null,
+                step === 1 ? step1Card : step2Card,
+                React.createElement("div", { style: { marginTop: 34 } },
+                    React.createElement("h2", { style: { fontFamily: DISPLAY_FONT, fontSize: 20, fontWeight: 600, margin: "0 0 14px" } }, "Assessment history · ", assessments.length),
+                    assessments.length === 0
+                        ? React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "No assessments recorded yet.")
+                        : React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, assessments.map((a) => React.createElement(AssessmentHistoryCard, { key: a.id, record: a, onDelete: deleteAssessment })))))));
+}
 const ATTACHMENT_WARN_BYTES = 3 * 1024 * 1024; // soft warning threshold per entry — no backend, everything lives in browser storage
 function PendingFileChip({ file, onRemove }) {
     return (React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, background: PANEL_RAISED, border: `1px solid ${LINE}`, borderRadius: 8, padding: "5px 8px 5px 5px", fontSize: 12 } },
@@ -32759,6 +32970,7 @@ function PracticalEntryCard({ entry, onDelete }) {
         entry.files && entry.files.length > 0 && (React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 } }, entry.files.map((f) => React.createElement(EntryFileChip, { key: f.id, file: f }))))));
 }
 function PracticalModule({ onBack }) {
+    const [section, setSection] = useState("log");
     const [people, setPeople] = useState([]);
     const [entries, setEntries] = useState([]);
     const [ready, setReady] = useState(false);
@@ -32906,13 +33118,20 @@ function PracticalModule({ onBack }) {
                 React.createElement(ChevronLeft, { size: 14 }),
                 " Dashboard"),
             React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 3, color: AMBER, textTransform: "uppercase", marginBottom: 4 } }, "Training"),
-            React.createElement("h1", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 34, margin: 0 } }, "Practical — Activity Log"),
-            React.createElement("p", { style: { color: MUTED, fontSize: 14, marginTop: 8, maxWidth: 560 } }, "Log every practical activity — training or incident — with how it was assessed and proof to back it up. Formal sign-off against versioned criteria will build on top of this log."),
+            React.createElement("h1", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 34, margin: 0 } }, "Practical Training"),
+            React.createElement("p", { style: { color: MUTED, fontSize: 14, marginTop: 8, maxWidth: 560 } }, section === "log"
+                ? "Log every practical activity — training or incident — with how it was assessed and proof to back it up."
+                : "Assess one or more firefighters against a unit's elements — Met, Needs Work, or Not Completed, per person."),
+            React.createElement("div", { style: { display: "flex", gap: 6, margin: "16px 0", background: PANEL_RAISED, border: `1px solid ${LINE}`, borderRadius: 8, padding: 4, width: "fit-content" } },
+                React.createElement("button", { onClick: () => setSection("log"), style: { background: section === "log" ? PANEL : "none", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 13, fontWeight: 600, color: section === "log" ? INK : MUTED, cursor: "pointer" } }, "Activity Log"),
+                React.createElement("button", { onClick: () => setSection("assess"), style: { background: section === "assess" ? PANEL : "none", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 13, fontWeight: 600, color: section === "assess" ? INK : MUTED, cursor: "pointer" } }, "Assessment")),
             loadError && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, margin: "16px 0", fontSize: 13 } }, loadError),
-            saveError && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, margin: "16px 0", fontSize: 13 } }, saveError),
+            saveError && section === "log" && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, margin: "16px 0", fontSize: 13 } }, saveError),
             !ready
                 ? React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading…")
-                : React.createElement(React.Fragment, null, formCard, logSection))));
+                : section === "log"
+                    ? React.createElement(React.Fragment, null, formCard, logSection)
+                    : React.createElement(PracticalAssessmentFlow, { people }))));
 }
 // ---------- theory catalog (concept preview) ----------
 // Category names below are INFERRED from the item list, not confirmed against the
@@ -33062,6 +33281,7 @@ function demoStatus(str) {
     return "green";
 }
 const STATUS_COLOR = { green: GREEN, amber: AMBER, red: RED };
+const categoryHeading = (cat) => /^\d+$/.test(cat.key) ? `${cat.key}. ${cat.name}` : cat.name;
 function TheoryOverviewGrid({ categories, people, expanded, onToggle }) {
     const colWidth = 46;
     const gridStyle = { display: "grid", gridTemplateColumns: `minmax(220px, 2fr) repeat(${people.length}, ${colWidth}px)` };
@@ -33077,7 +33297,7 @@ function TheoryOverviewGrid({ categories, people, expanded, onToggle }) {
     categories.forEach((cat) => {
         items.push(React.createElement("button", { key: "div-" + cat.key, onClick: () => onToggle(cat.key), style: { gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 8, background: PANEL_RAISED, border: "none", borderTop: `1px solid ${LINE}`, borderBottom: `1px solid ${LINE}`, padding: "9px 10px", fontWeight: 600, fontSize: 13.5, cursor: "pointer", textAlign: "left" } },
             React.createElement(ChevronRight, { size: 14, color: MUTED, style: { transform: expanded[cat.key] ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 } }),
-            cat.name,
+            categoryHeading(cat),
             React.createElement("span", { style: { color: MUTED, fontWeight: 500, fontSize: 12 } }, "· ", cat.items.length)));
         if (!expanded[cat.key])
             return;
@@ -33102,7 +33322,7 @@ function TheoryItemRow({ text }) {
 function TheoryCategorySection({ category, expanded, onToggle }) {
     return (React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" } },
         React.createElement("button", { onClick: onToggle, style: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", padding: "14px 16px", cursor: "pointer", textAlign: "left" } },
-            React.createElement("span", { style: { fontWeight: 600, fontSize: 14.5 } }, category.name, " ", React.createElement("span", { style: { color: MUTED, fontWeight: 500, fontSize: 12.5 } }, "· ", category.items.length)),
+            React.createElement("span", { style: { fontWeight: 600, fontSize: 14.5 } }, categoryHeading(category), " ", React.createElement("span", { style: { color: MUTED, fontWeight: 500, fontSize: 12.5 } }, "· ", category.items.length)),
             React.createElement(ChevronRight, { size: 16, color: MUTED, style: { transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" } })),
         expanded && React.createElement("div", { style: { padding: "0 16px 8px" } }, category.items.map((item) => React.createElement(TheoryItemRow, { key: item, text: item })))));
 }
