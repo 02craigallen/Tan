@@ -32596,6 +32596,7 @@ function PersonalInfoModule({ onBack }) {
     const [meId, setMeId] = useState(currentUser && currentUser.personId ? currentUser.personId : null);
     const [tab, setTab] = useState("me"); // 'me' | 'all'
     const [editing, setEditing] = useState(false);
+    const [addingStaff, setAddingStaff] = useState(false);
     useEffect(() => {
         (async () => {
             try {
@@ -32609,13 +32610,14 @@ function PersonalInfoModule({ onBack }) {
             }
         })();
     }, []);
-    async function savePerson(person) {
+    async function savePerson(person, { asMe = true } = {}) {
         const exists = people.some((p) => p.id === person.id);
         try {
             const saved = exists ? await peopleApi.update(person.id, person) : await peopleApi.create(person);
             setPeople((prev) => exists ? prev.map((p) => (p.id === saved.id ? saved : p)) : [...prev, saved]);
-            setMeId(saved.id);
+            if (asMe) setMeId(saved.id);
             setEditing(false);
+            setAddingStaff(false);
             setError(null);
         }
         catch (err) {
@@ -32651,14 +32653,18 @@ function PersonalInfoModule({ onBack }) {
                 React.createElement(TabBtn, { active: tab === "all", onClick: () => setTab("all"), icon: React.createElement(Users, { size: 14 }) }, "All staff (Admin / Management)")),
             !ready ? (React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading\u2026")) : tab === "me" ? (React.createElement("div", { style: { marginTop: 22 } },
                 !meId && !editing && (React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 24 } },
-                    React.createElement("div", { style: { fontSize: 14, color: MUTED, marginBottom: 12 } }, "No login yet, so pick who you are \u2014 or set up your profile for the first time."),
+                    React.createElement("div", { style: { fontSize: 14, color: MUTED, marginBottom: 12 } }, currentUser && currentUser.role === "firefighter"
+                        ? "Pick your name below \u2014 if it's not listed yet, ask an admin or your management to add you to the staff list first."
+                        : "No login yet, so pick who you are \u2014 or set up your profile for the first time."),
                     React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } },
                         React.createElement("select", { onChange: (e) => e.target.value && setMeId(e.target.value), value: "", style: { ...inputStyle, width: "auto", minWidth: 200 } },
                             React.createElement("option", { value: "" }, "Select your name\u2026"),
                             people.map((p) => (React.createElement("option", { key: p.id, value: p.id }, p.name)))),
-                        React.createElement("button", { onClick: () => setEditing(true), style: { ...primaryBtn, background: "#6B5B95" } }, "Set up my profile")))),
+                        currentUser && currentUser.role !== "firefighter" && React.createElement("button", { onClick: () => setEditing(true), style: { ...primaryBtn, background: "#6B5B95" } }, "Set up my profile")))),
                 meId && !editing && me && React.createElement(ProfileCard, { person: me, onEdit: () => setEditing(true), onSwitch: () => setMeId(null) }),
                 editing && React.createElement(ProfileForm, { initial: me, onCancel: () => setEditing(false), onSave: savePerson }))) : (React.createElement("div", { style: { marginTop: 22, display: "flex", flexDirection: "column", gap: 10 } },
+                canManageStaff && !addingStaff && React.createElement("button", { onClick: () => setAddingStaff(true), style: { ...primaryBtn, background: "#6B5B95", alignSelf: "flex-start", marginBottom: 4 } }, "+ Add staff"),
+                addingStaff && React.createElement(ProfileForm, { initial: null, onCancel: () => setAddingStaff(false), onSave: (person) => savePerson(person, { asMe: false }) }),
                 people.length === 0 && React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "No staff added yet."),
                 people.map((p) => React.createElement(StaffRow, { key: p.id, person: p, canManage: canManageStaff, onDelete: deletePerson })))))));
 }
