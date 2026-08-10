@@ -6,7 +6,7 @@ async function main() {
     const people = [
         { id: "seed-combes", name: "FF Combes", payrollNumber: "", rank: "Firefighter", watch: "Red", phone: "", emergencyName: "", emergencyPhone: "" },
         { id: "seed-ryan", name: "FF Ryan", payrollNumber: "", rank: "Firefighter", watch: "Blue", phone: "", emergencyName: "", emergencyPhone: "" },
-        { id: "seed-pleasants", name: "FF Pleasants", payrollNumber: "", rank: "Firefighter", watch: "Green", phone: "", emergencyName: "", emergencyPhone: "" },
+        { id: "seed-pleasants", name: "FF Pleasants", payrollNumber: "", rank: "Firefighter", watch: "Blue", phone: "", emergencyName: "", emergencyPhone: "" },
     ];
     await container.items.upsert({ id: "people:list", value: people, updatedAt: new Date().toISOString() });
     console.log("Seeded people:list with", people.length, "people");

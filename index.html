@@ -32622,6 +32622,19 @@ function PersonalInfoModule({ onBack }) {
             setError(err.message || "Couldn't save that.");
         }
     }
+    async function deletePerson(person) {
+        if (!window.confirm(`Remove ${person.name} from staff? This can't be undone.`)) return;
+        try {
+            await peopleApi.remove(person.id);
+            setPeople((prev) => prev.filter((p) => p.id !== person.id));
+            if (meId === person.id) setMeId(null);
+            setError(null);
+        }
+        catch (err) {
+            setError(err.message || "Couldn't remove that person.");
+        }
+    }
+    const canManageStaff = currentUser && (currentUser.role === "admin" || currentUser.role === "management");
     const me = people?.find((p) => p.id === meId) || null;
     return (React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
         React.createElement(FontImport, null),
@@ -32646,22 +32659,28 @@ function PersonalInfoModule({ onBack }) {
                         React.createElement("button", { onClick: () => setEditing(true), style: { ...primaryBtn, background: "#6B5B95" } }, "Set up my profile")))),
                 meId && !editing && me && React.createElement(ProfileCard, { person: me, onEdit: () => setEditing(true), onSwitch: () => setMeId(null) }),
                 editing && React.createElement(ProfileForm, { initial: me, onCancel: () => setEditing(false), onSave: savePerson }))) : (React.createElement("div", { style: { marginTop: 22, display: "flex", flexDirection: "column", gap: 10 } },
-                React.createElement("div", { style: { fontSize: 12.5, color: MUTED, background: PANEL_RAISED, border: `1px solid ${LINE}`, borderRadius: 8, padding: "10px 14px" } }, "This tab is meant for Admin / Management only \u2014 real access control needs login to be built first, so treat this as a preview for now."),
                 people.length === 0 && React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "No staff added yet."),
-                people.map((p) => (React.createElement("div", { key: p.id, style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" } },
-                    React.createElement("div", null,
-                        React.createElement("div", { style: { fontWeight: 600, fontSize: 14.5 } }, p.name),
-                        React.createElement("div", { style: { fontSize: 12.5, color: MUTED, marginTop: 2 } },
-                            p.rank || "—",
-                            " \u00B7 ",
-                            p.watch,
-                            " watch \u00B7 Payroll ",
-                            p.payrollNumber || "—")),
-                    React.createElement("div", { style: { fontSize: 12.5, color: MUTED, textAlign: "right" } },
-                        React.createElement("div", null, p.phone || "—"),
-                        React.createElement("div", null,
-                            "Emergency: ",
-                            p.emergencyName ? `${p.emergencyName} · ${p.emergencyPhone}` : "—"))))))))));
+                people.map((p) => React.createElement(StaffRow, { key: p.id, person: p, canManage: canManageStaff, onDelete: deletePerson })))))));
+}
+function StaffRow({ person: p, canManage, onDelete }) {
+    const details = React.createElement("div", { style: { fontSize: 12.5, color: MUTED, textAlign: "right" } },
+        React.createElement("div", null, p.phone || "\u2014"),
+        React.createElement("div", null,
+            "Emergency: ",
+            p.emergencyName ? `${p.emergencyName} \u00B7 ${p.emergencyPhone}` : "\u2014"));
+    const deleteBtn = canManage && React.createElement("button", { onClick: () => onDelete(p), title: "Remove from staff", style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${RED}`, color: RED, padding: "6px 10px", borderRadius: 6, fontSize: 12.5, cursor: "pointer", whiteSpace: "nowrap" } },
+        React.createElement(Trash2, { size: 13 }),
+        " Remove");
+    return React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 } },
+        React.createElement("div", null,
+            React.createElement("div", { style: { fontWeight: 600, fontSize: 14.5 } }, p.name),
+            React.createElement("div", { style: { fontSize: 12.5, color: MUTED, marginTop: 2 } },
+                p.rank || "\u2014",
+                " \u00B7 ",
+                p.watch,
+                " watch \u00B7 Payroll ",
+                p.payrollNumber || "\u2014")),
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 16 } }, details, deleteBtn));
 }
 function TabBtn({ active, onClick, icon, children }) {
     return (React.createElement("button", { onClick: onClick, style: {
@@ -32723,7 +32742,7 @@ function ProfileForm({ initial, onCancel, onSave }) {
             React.createElement(Field, { label: "Rank / role" },
                 React.createElement("input", { value: rank, onChange: (e) => setRank(e.target.value), placeholder: "e.g. Firefighter, Crew Manager", style: inputStyle })),
             React.createElement(Field, { label: "Watch" },
-                React.createElement("select", { value: watch, onChange: (e) => setWatch(e.target.value), style: inputStyle }, ["Red", "White", "Blue", "Green"].map((w) => (React.createElement("option", { key: w, value: w }, w))))),
+                React.createElement("select", { value: watch, onChange: (e) => setWatch(e.target.value), style: inputStyle }, WATCHES.map((w) => (React.createElement("option", { key: w, value: w }, w))))),
             React.createElement(Field, { label: "Contact number" },
                 React.createElement("input", { value: phone, onChange: (e) => setPhone(e.target.value), style: inputStyle })),
             React.createElement("div", null),
@@ -33765,7 +33784,7 @@ function ReportsModule({ onBack, onGoToAssessment }) {
                         : selected.map((p) => React.createElement(PersonReportCard, { key: p.id, person: p, assessments, onGoToAssessment })))))));
 }
 
-const WATCHES = ["Red", "White", "Blue", "Green"];
+const WATCHES = ["Red", "White", "Blue"];
 const ROLES = ["firefighter", "management", "admin"];
 function NewUserForm({ people, onCreated }) {
     const [email, setEmail] = useState("");
