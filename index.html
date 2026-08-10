@@ -32379,7 +32379,7 @@ function App() {
     if (view === "practical")
         return React.createElement(PracticalModule, { onBack: () => setView("dashboard") });
     if (view === "theory")
-        return (React.createElement(PlaceholderModule, { onBack: () => setView("dashboard"), eyebrow: "Theory", title: "Theory Sign-off", icon: React.createElement(BookOpen, { size: 22 }), blurb: "PDF-gated self sign-off with per-topic renewal \u2014 built once Practical is in place." }));
+        return React.createElement(TheoryModule, { onBack: () => setView("dashboard") });
     return React.createElement(Dashboard, { onOpen: setView });
 }
 function Dashboard({ onOpen }) {
@@ -32393,11 +32393,13 @@ function Dashboard({ onOpen }) {
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginTop: 34 } },
                 React.createElement(ModuleCard, { eyebrow: "Equipment", title: "EMS", desc: "Test schedules, sign-offs, and full accountability history for every piece of station equipment.", icon: React.createElement(Wrench, { size: 22 }), color: RED, live: true, onClick: () => onOpen("ems") }),
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Practical", desc: "Log practical activities and evidence — formal sign-off against versioned criteria comes next.", icon: React.createElement(ClipboardCheck, { size: 22 }), color: AMBER, live: true, onClick: () => onOpen("practical") }),
-                React.createElement(ModuleCard, { eyebrow: "Training", title: "Theory", desc: "Self-declared understanding, gated behind reading the material.", icon: React.createElement(BookOpen, { size: 22 }), color: GREEN, onClick: () => onOpen("theory") }),
+                React.createElement(ModuleCard, { eyebrow: "Training", title: "Theory", desc: "Self-declared understanding, gated behind reading the material. Concept preview of the full item list available now.", icon: React.createElement(BookOpen, { size: 22 }), color: GREEN, badge: "Preview", onClick: () => onOpen("theory") }),
                 React.createElement(ModuleCard, { eyebrow: "Records", title: "Personal Info", desc: "Payroll number, contact details, and emergency contact for each firefighter.", icon: React.createElement(User, { size: 22 }), color: "#6B5B95", live: true, onClick: () => onOpen("personal") }),
                 React.createElement(ModuleCard, { eyebrow: "Overview", title: "Calendar", desc: "Everything coming due, in one place. Currently shows EMS \u2014 Practical and Theory will join once built.", icon: React.createElement(CalendarDays, { size: 22 }), color: "#2E6E7E", live: true, onClick: () => onOpen("calendar") })))));
 }
-function ModuleCard({ eyebrow, title, desc, icon, color, live, onClick }) {
+function ModuleCard({ eyebrow, title, desc, icon, color, live, badge, onClick }) {
+    const badgeText = live ? "Live" : (badge || "Coming soon");
+    const badgeStyle = live ? { color: "#3C5528", background: "#E4EBDB" } : badge ? { color: "#5C3E10", background: "#FBEFD9" } : { color: MUTED, background: PANEL_RAISED };
     return (React.createElement("button", { onClick: onClick, style: {
             textAlign: "left",
             background: PANEL,
@@ -32409,7 +32411,7 @@ function ModuleCard({ eyebrow, title, desc, icon, color, live, onClick }) {
         } },
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
             React.createElement("div", { style: { width: 40, height: 40, borderRadius: 8, background: BG, display: "flex", alignItems: "center", justifyContent: "center", color } }, icon),
-            live ? (React.createElement("span", { style: { fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: "#3C5528", background: "#E4EBDB", padding: "3px 8px", borderRadius: 20, textTransform: "uppercase" } }, "Live")) : (React.createElement("span", { style: { fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: MUTED, background: PANEL_RAISED, padding: "3px 8px", borderRadius: 20, textTransform: "uppercase" } }, "Coming soon"))),
+            React.createElement("span", { style: { fontSize: 10.5, fontWeight: 700, letterSpacing: 1, padding: "3px 8px", borderRadius: 20, textTransform: "uppercase", ...badgeStyle } }, badgeText)),
         React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 10.5, letterSpacing: 1.5, color: MUTED, textTransform: "uppercase", marginTop: 16 } }, eyebrow),
         React.createElement("div", { style: { fontFamily: DISPLAY_FONT, fontSize: 24, fontWeight: 600, marginTop: 2 } }, title),
         React.createElement("div", { style: { fontSize: 13.5, color: MUTED, marginTop: 8, lineHeight: 1.5 } }, desc),
@@ -32905,25 +32907,217 @@ function PracticalModule({ onBack }) {
                 ? React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading…")
                 : React.createElement(React.Fragment, null, formCard, logSection))));
 }
-function PlaceholderModule({ onBack, eyebrow, title, icon, blurb }) {
+// ---------- theory catalog (concept preview) ----------
+// Category names below are INFERRED from the item list, not confirmed against the
+// real system — only "Breathing Apparatus" (source screenshot said "Knowledge and
+// Understanding") is even partly sourced. Treat every header as a guess to correct.
+const THEORY_CATALOG = [
+    { key: "1", name: "Breathing Apparatus", items: [
+        "1.1. Physiology of Respiration v2", "1.2. Search Procedures v2", "1.3. Cylinders and Working Duration v2",
+        "1.5. Working in Smoke v2", "1.6. Entrapped Procedures v2", "1.7. Working in Hot and Humid Atmospheres v2",
+        "1.8. Backdraught and Flashover v2",
+    ] },
+    { key: "2", name: "First Aid & Casualty Care", items: [
+        "2.01. Basic Life Support v2", "2.02. Oxygen & AED v2", "2.03. Airways Management v2", "2.04. Shock & Bleeding v2",
+        "2.05. Head injuries v2", "2.06. Primary survey v2", "2.07. Chest Injuries v2", "2.08. Management of an Unconscious Casualty v2",
+        "2.09. Fractures v2", "2.10. Management of a Choking Casualty v2", "2.11. Abdominal & Pelvic Trauma v2",
+        "2.12. Spinal Injuries v2", "2.13. Soft Tissue Injuries v2", "2.14. Emergency Medical Supplies Trailer v2",
+        "2.15. First Aid at Work Course v2", "2.16. Manual Handling v2",
+    ] },
+    { key: "3", name: "Extinguishing Agents", items: [
+        "3.01. Foam v2", "3.02. Dry Powder v2", "3.03. Halons v2", "3.04. Carbon Dioxide v2", "3.05. First Aid Fire Extinguishers v2",
+    ] },
+    { key: "4", name: "Aircraft Types & Construction", items: [
+        "4.01. Medium Sized Jets v2", "4.02. Turboprop Aircraft v2", "4.03. Helicopters v2", "4.04. Aircraft Construction General v2",
+        "4.05. Light Aircraft & Ballistics Parachute Systems v2", "4.06. Access to Reinforced Cockpit Doors",
+        "4.07. Aircraft Recovery Dolly Procedures v2",
+    ] },
+    { key: "5", name: "Appliances & Vehicles", items: [
+        "5.01. Appliance Specifications v2", "5.02. Test & Inspections for Fire Appliances v2", "5.03. Media Quality & Calibration Checks v2",
+        "5.04. Appliance Pump & Foam Systems v2", "5.05. Appliance Legislation v2", "5.06. Appliance Replenishment Procedures v2",
+        "5.07. Mitsubishi Shogun Test & Inspection v2", "5.08. Panther Operations Manual v2", "5.09. New Panther RFFS Training Programme v2",
+    ] },
+    { key: "6", name: "Firefighting Tactics", items: [
+        "6.01. Aircraft Firefighting Tactics & Techniques v2", "6.02. Internal Fires v2", "6.03. Military Aircraft & Lift Out Procedures v2",
+        "6.04. Aircraft Engines/Undercarriage v2", "6.05. National ICS v2", "6.06. Live Fire Training v2",
+    ] },
+    { key: "7", name: "Hazardous Materials", items: [
+        "7.01 polymer composites v2", "7.02. Fuel & Fuel Tankers v2", "7.03. Liquefied Petroleum Gases v2", "7.04. Hazardous Materials v2",
+        "7.05. RADIATION (SUPERVISOR LEVEL)", "7.05. Radiation v2", "7.06. Emergency Decontamination v2", "7.07. Emergency Spill Kit Trailer v2",
+    ] },
+    { key: "8", name: "Health & Safety / Legislation", items: [
+        "8.01. Accident Reporting Including RIDDOR v2", "8.02 coshh v2", "8.03. Display Screen Equipment v2", "8.04. Dynamic Risk Assessment v2",
+        "8.05 Risk Assessment v2", "8.06. Health & Safety at Work Etc Act 1974 v2", "8.07. Manual Handling Operations Regulations v2",
+        "8.08. PERSONAL PROTECTIVE EQUIPMENT REGULATIONS", "8.09. Airside Safety Brief v2", "8.10. Safe Working at Height & Confined Spaces v2",
+        "8.11. CAA Mandatory Occurrence Reporting Scheme v2", "8.12. PTSD/Diffusing Awareness",
+    ] },
+    { key: "9", name: "Equipment & Practical Skills", items: [
+        "9.01. USE OF HAND TOOLS", "9.02. Safe Use of Partner Saw v2", "9.02.02 - PRACTICAL USE OF THE PARTNER SAW",
+        "9.03. Safe Use of Dewalt Saw v2", "9.03.02 - PRACTICAL USE OF THE DEWALT SAW", "9.04. Safe Use of Airbags v2",
+        "9.04.02 - PRACTICAL USE THE AIRBAGS", "9.05. KNOTS & LINES", "9.06. LADDER DRILLS", "9.07. USE OF THERMAL IMAGING EQUIPMENT",
+        "9.08. Safe Use of Webber Tools v2", "9.08.02 - PRACTICAL USE OF THE WEBBER TOOLS", "9.09. HOSE DEPLOYMENT DRILLS",
+        "9.10. SECONDARY MEDIA DEPLOYMENT DRILLS", "9.12. AIRPORT FIRE SERVICE EQUIPMENT TRAILER", "9.13. USE OF THE AIRSHELTER",
+        "9.14. ABRASIVE WHEEL COURSE", "9.15. Aircraft Recovery Training v2", "9.16 Winch Operations",
+    ] },
+    { key: "10", name: "Procedures & Regulations", items: [
+        "10.01. CAA Regulation 139/2014 Overview v2", "10.02. Fuel Spill Procedures v2", "10.03. Introduction to Fire Safety v2",
+        "10.04. Airport Manual v2", "10.05. Emergency Orders v2", "10.06. Watchroom Procedures v2", "10.07. Airport Pollution Control v2",
+        "10.08. Radio Communication/CAP413 v2", "10.09. Standard Operating Procedures v2", "10.10. Test & Inspection Reference Folder v2",
+        "10.11. Human Factors Awareness v2", "10.12. RFFS PROCEDURE TEST & INSPECTION FOLDER", "10.12. Staff Appraisals v2",
+        "10.13. RFFS PROCEDURE MANUAL VOLUME 5",
+    ] },
+    { key: "11", name: "Incident Ground Management", items: [
+        "11.01. Rendezvous Points v2", "11.02. Incident Zoning v2", "11.03. Preservation of Evidence v2",
+        "11.04. Passenger Evacuation Management System v2",
+    ] },
+    { key: "12", name: "Airfield Familiarisation", items: [
+        "12.01. Low Visibility Procedures v2", "12.02. 1000 Metre Response Area v2", "12.03. Map Reading v2", "12.04. Airside Topography v2",
+        "12.05. Fuel Farm Familiarisation v2", "12.06. Hanger Familiarisation v2", "12.07. ATC Building Familiarisation v2",
+        "12.08. Terminal Building Familiarisation v2",
+    ] },
+    { key: "13", name: "Driving", items: [
+        "13.01. RFFS Response Driving Refresher v2", "13.02. Airside Driving 'R' Permit Practical Assessment v2",
+        "13.03. Off Airfield Driver Training - Panthers v2", "13.04. Off Airfield Driving - Colour Coded Routes v2",
+        "13.05. DVLA licence check v2", "13.06. New Panther RFFS Response Driving Conversion v2",
+    ] },
+    { key: "14", name: "Winter Operations & Ground Equipment", items: [
+        "14.01. Runway Surface Inspections v2", "14.02. Baggage Handling v2", "14.03. Winter Operations Equipment v2",
+        "14.03.01 GRIPTESTER OPERATOR", "14.03.02 GRIPTESTER TRAINER", "14.05.01 - SAFE USE OF THE TRACTOR",
+        "14.05.02 - SAFE USE OF THE AIRFIELD SPRAYER", "14.05.03 - SAFE USE OF THE AIRFIELD SWEEPER",
+    ] },
+    { key: "whm", name: "Wildlife Hazard Management", items: [
+        "M14-WHM 06 - PRACTICAL USE OF VEREY PISTOL & LASER", "M14-WHM-01 - CAP 772 BIRDSTRIKE RISK MANAGEMENT (READ)",
+        "M14-WHM-02 - WILDLIFE & HABITAT MANAGEMENT PLAN (READ)", "M14-WHM-03 PRINCIPLES & METHODOLOGY (Powerpoint)",
+        "M14-WHM-04 BIRD IDENTIFICATION (Powerpoint)", "M14-WHM-05 VEREY PISTOL & LASER - (Powerpoint)",
+        "M14-WHM-07 - FIREARM CERTIFICATE CHECK", "M14-WHM-08 - SHOTGUN LICENSE CHECK",
+        "M14-WHM-10 BML -BIRD HAZARD MANAGEMENT COURSE", "M14-WHM-11 STATION WHM / BCU INPUT -NEW START",
+    ] },
+    { key: "15", name: "Fitness & Medical", items: [
+        "15.01. Basic Anatomy v2", "15.02. Flexibility v2", "15.03. Safety in Physical Training v2", "15.04. Warm Ups & Activities v2",
+        "15.05. Fitness Assessment v2", "15.06. Fitness Training v2", "15.07. Fire Service Medical v2", "15.08. Nutrition & Lifestyle v2",
+        "15.09. Audio Risk Assessment v2", "15.10. Spirometry v2",
+    ] },
+    { key: "16", name: "Crew Commander", items: [
+        "16.01 FUNCTIONAL LEADERSHIP", "16.02 ROLE & RESPONSIBILITIES OF THE CREW COMMANDER", "16.03 GRIEVANCE & DISCIPLINARY PROCEDURE",
+        "16.04 MANAGING THE SAFETY OF OTHERS", "16.05 GENERAL MANAGEMENT OF EXTINGUISHING AGENTS", "16.06 PLANNING FOR FUTURE RESOURCE NEEDS",
+        "16.07 POST ACCIDENT INVESTIGATION", "16.08 CAA REGULATION 139/2014, ADR.OPS.B.010", "16.09 CAA REGULATION 139/2014, ADR.OPS.B.005",
+        "16.10 CRITICAL AREA CONCEPT", "16.11 ICS1 - INCIDENT RISK MANAGEMENT", "16.12 ICS2 - ORGANISATION OF THE INCIDENT GROUND",
+        "16.13 ICS3 - COMMAND WITHIN THE UK RESILIENCE FRAMEWORK", "16.14 RFFS CAA CREW COMMANDER COURSE",
+        "16.15 RADIO COMMUNICATIONS AT OPERATIONAL INCIDENTS",
+    ] },
+    { key: "17", name: "Watch Supervisor", items: [
+        "17.01 AERODROME SAFETY", "17.02 MANAGING A TRAINING PROGRAMME", "17.03 RESOURCE MANAGEMENT", "17.04 SCENE MANAGEMENT",
+        "17.05 CAA REGULATION 139/2014, ADR.OPS.B.010", "17.06 CAA REGULATION 139/2014, ADR.OPS.B.005", "17.07 BREATHING APPARATUS SUPERVISOR",
+        "17.08 GRIEVANCE & DISCIPLINARY PROCEDURES", "17.09 TRANSPORT OF DANGEROUS GOODS BY AIR", "17.10 EMERGENCY PLANNING",
+        "17.11 ICS1 - INCIDENT RISK MANAGEMENT", "17.12 ICS2 - ORGANISATION OF THE INCIDENT GROUND",
+        "17.13 ICS3 - COMMAND WITHIN THE UK RESILIENCE FRAMEWORK", "17.14 CAA RFFS SUPERVISOR COURSE",
+        "17.15 RADIO COMMUNICATIONS AT OPERATIONAL INCIDENTS", "17.16.v2 RFFS SUPERVISOR RESPONSE DRIVER",
+    ] },
+    { key: "18", name: "Watch Manager (least confident guess — please rename)", items: [
+        "18.01 L200 TEST & INSPECTION", "18.03 PERSONAL PROTECTIVE EQUIPMENT REGULATIONS", "18.04 AIRSIDE SAFETY BRIEF",
+        "18.05 MANDATORY OCCURANCE REPORTING SCHEME", "18.06 RADIO COMMUNICATIONS INCLUDING CAP413", "18.07 STAFF APPRAISAL",
+        "18.08 LOW VISILBILITY PROCEDURES", "18.09 1000M RESPONSE AREA", "18.10 AIRSIDE TOPOGRAPHY",
+        "18.11 AFS RESPONSE DRIVER ANNUAL ASSESSMENT", "18.12 PRINCIPLES OF OFF ROAD DRIVING", "18.13 OFF ROAD DRIVING VEHICLE OPERATIONS",
+        "18.14 PARKING IN APPLIANCE BAYS", "18.15 AIRSIDE DRIVING PERMIT", "18.16 APPLIANCE MARSHALLING",
+        "18.17 OPERATION OF APPLIANCE BAY DOORS", "18.18 OPERATION OF EXHAUST EXTRACTION SYSTEM",
+        "18.19 OFF AIRPORT DRIVING ROUTES - DAYLIGHT", "18.20 OFF AIRPORT DRIVING ROUTES - DARKNESS",
+        "18.21 AFS RESPONSE DRIVER MODULE 1 - AIRSIDE", "18.22 AFS RESPONSE DRIVER MODULE 2 - LANDSIDE", "18.23 DVLA LICENSE CHECK",
+        "18.24 FITNESS ASSESSMENT", "18.25 AERODROME SAFETY", "18.26 MANAGING A TRAINING PROGRAMME", "18.27 RESOURCE MANAGEMENT",
+        "18.28 SCENE MANAGEMENT", "18.29 CAA REGULATION 139/2014, ADR.OPS.B.010", "18.30 CAA REGULATION 139/2014, ADR.OPS.B.005",
+        "18.31 BREATHING APPARATUS LEGISLATION", "18.32 GRIEVANCE & DISCIPLINARY PROCEDURES", "18.33 TRANSPORT OF DANGEROUS GOODS BY AIR",
+        "18.34 EMERGENCY PLANNING", "18.35 ICS1 - INCIDENT RISK MANAGEMENT", "18.36 ICS2 - ORGANISATION ON THE INCIDENT GROUND",
+        "18.37 ICS3 - COMMAND WITHIN THE UK RESILIENCE FRAMEWORK", "18.38 CAA RFFS SUPERVISOR COURSE",
+        "18.39 RADIO COMMUNICATIONS AT OPERATIONAL INCIDENTS", "18.40 Fire Service Medical", "18.41 First Aid At Work Course",
+    ] },
+    { key: "19", name: "Spaceport Operations", items: [
+        "19.01 AIRCRAFT FAMILIARISATION - PRACTICAL", "19.02 AIRCRAFT FAMILIARISATION - THEORY", "19.03 ROCKET FAMILIARISATION - PRACTICAL",
+        "19.04 ROCKET FAMILIARISATION - THEORY", "19.05 MANAGING INCIDENT SAFETY AND HAZMAT COURSE",
+        "19.06 SPACEPORT GSE FAMILIARISATION - PRACTICAL", "19.07 VO AREA WARNING LIGHTS & PA SYSTEM - THEORY",
+        "19.08 SPACE SYSTEMS INTEGRATION FACILITY FAM - PRACTICAL", "19.09 SPACE SYSTEMS INTEGRATION FACILITY FAM. - THEORY",
+        "19.10 X002 - SPACEPORT EMERGENCY RESPONSE PLAN", "19.11 PROPELLANTS AND OXIDISERS", "19.12 X001 - SPACEPORT MANUAL",
+    ] },
+    { key: "other", name: "Other", items: [
+        "RFFS Ramp Vehicle Familiarisation", "Redkite Tracker Assessment Entry", "Winter Ops including Equipment Familiarisation",
+    ] },
+];
+function theoryHash(str) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++)
+        h = (h * 31 + str.charCodeAt(i)) | 0;
+    return Math.abs(h);
+}
+function demoStatus(str) {
+    const n = theoryHash(str) % 100;
+    if (n < 8)
+        return "red";
+    if (n < 23)
+        return "amber";
+    return "green";
+}
+const STATUS_COLOR = { green: GREEN, amber: AMBER, red: RED };
+function TheoryItemRow({ text }) {
+    const status = demoStatus(text);
+    return (React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 4px", borderBottom: `1px solid ${LINE}`, fontSize: 13.5 } },
+        React.createElement("span", null, text),
+        React.createElement("span", { title: status, style: { width: 18, height: 18, borderRadius: 4, background: STATUS_COLOR[status], flexShrink: 0 } })));
+}
+function TheoryCategorySection({ category, expanded, onToggle }) {
+    return (React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" } },
+        React.createElement("button", { onClick: onToggle, style: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", padding: "14px 16px", cursor: "pointer", textAlign: "left" } },
+            React.createElement("span", { style: { fontWeight: 600, fontSize: 14.5 } }, category.name, " ", React.createElement("span", { style: { color: MUTED, fontWeight: 500, fontSize: 12.5 } }, "· ", category.items.length)),
+            React.createElement(ChevronRight, { size: 16, color: MUTED, style: { transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" } })),
+        expanded && React.createElement("div", { style: { padding: "0 16px 8px" } }, category.items.map((item) => React.createElement(TheoryItemRow, { key: item, text: item })))));
+}
+function TheoryModule({ onBack }) {
+    const [expanded, setExpanded] = useState({});
+    const [query, setQuery] = useState("");
+    const filtered = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        if (!q)
+            return THEORY_CATALOG;
+        return THEORY_CATALOG.map((c) => ({ ...c, items: c.items.filter((i) => i.toLowerCase().includes(q)) })).filter((c) => c.items.length > 0);
+    }, [query]);
+    function toggle(key) {
+        setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+    }
+    function expandAll() {
+        const next = {};
+        filtered.forEach((c) => { next[c.key] = true; });
+        setExpanded(next);
+    }
+    function collapseAll() {
+        setExpanded({});
+    }
+    const totalItems = THEORY_CATALOG.reduce((sum, c) => sum + c.items.length, 0);
     return (React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
         React.createElement(FontImport, null),
         React.createElement(TopBanner, null),
-        React.createElement("div", { style: { maxWidth: 1000, margin: "0 auto", padding: "28px 20px 60px", position: "relative" } },
+        React.createElement("div", { style: { maxWidth: 900, margin: "0 auto", padding: "28px 20px 60px", position: "relative" } },
             React.createElement("button", { onClick: onBack, style: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: MUTED, fontSize: 13, padding: 0, marginBottom: 20 } },
-                React.createElement(ChevronRight, { size: 14, style: { transform: "rotate(180deg)" } }),
+                React.createElement(ChevronLeft, { size: 14 }),
                 " Dashboard"),
-            React.createElement("div", { style: {
-                    background: PANEL,
-                    border: `1px dashed ${LINE}`,
-                    borderRadius: 10,
-                    padding: "60px 30px",
-                    textAlign: "center",
-                } },
-                React.createElement("div", { style: { width: 52, height: 52, borderRadius: 10, background: BG, display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, margin: "0 auto 18px" } }, icon),
-                React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 2, color: MUTED, textTransform: "uppercase" } }, eyebrow),
-                React.createElement("h2", { style: { fontFamily: DISPLAY_FONT, fontSize: 26, fontWeight: 600, margin: "6px 0 10px" } }, title),
-                React.createElement("p", { style: { color: MUTED, fontSize: 14, maxWidth: 380, margin: "0 auto" } }, blurb)))));
+            React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 3, color: GREEN, textTransform: "uppercase", marginBottom: 4 } }, "Training"),
+            React.createElement("h1", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 34, margin: 0 } }, "Theory Sign-off — Concept Preview"),
+            React.createElement("p", { style: { color: MUTED, fontSize: 14, marginTop: 8, maxWidth: 620 } },
+                totalItems,
+                " theory items across ",
+                THEORY_CATALOG.length,
+                " categories, transcribed from the old system's item list."),
+            React.createElement("div", { style: { background: "#FBEFD9", border: `1px solid ${AMBER}`, color: "#5C3E10", padding: "12px 16px", borderRadius: 8, margin: "16px 0", fontSize: 13, lineHeight: 1.5 } },
+                React.createElement("strong", null, "This is a look-and-feel concept only —"),
+                " statuses (green / amber / red) shown below are random demo data, not real records, and category names were inferred from item names, not confirmed. Nothing here is wired to real sign-off logic yet."),
+            React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 14, alignItems: "center", margin: "18px 0" } },
+                React.createElement("div", { style: { display: "flex", gap: 14, fontSize: 12.5, color: MUTED } },
+                    React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 5 } }, React.createElement("span", { style: { width: 12, height: 12, borderRadius: 3, background: GREEN, display: "inline-block" } }), "Up to date"),
+                    React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 5 } }, React.createElement("span", { style: { width: 12, height: 12, borderRadius: 3, background: AMBER, display: "inline-block" } }), "Coming up for renewal"),
+                    React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 5 } }, React.createElement("span", { style: { width: 12, height: 12, borderRadius: 3, background: RED, display: "inline-block" } }), "Overdue / not signed off"))),
+            React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" } },
+                React.createElement("input", { value: query, onChange: (e) => setQuery(e.target.value), placeholder: "Search theory items…", style: { ...inputStyle, maxWidth: 280 } }),
+                React.createElement("button", { onClick: expandAll, style: { background: "none", border: `1px solid ${LINE}`, color: INK, padding: "9px 14px", borderRadius: 6, fontSize: 13 } }, "Expand all"),
+                React.createElement("button", { onClick: collapseAll, style: { background: "none", border: `1px solid ${LINE}`, color: INK, padding: "9px 14px", borderRadius: 6, fontSize: 13 } }, "Collapse all")),
+            filtered.length === 0
+                ? React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "No matching items.")
+                : filtered.map((c) => React.createElement(TheoryCategorySection, { key: c.key, category: c, expanded: query.trim() ? true : !!expanded[c.key], onToggle: () => toggle(c.key) })))));
 }
 
 var root = ReactDOM.createRoot(document.getElementById("root"));
