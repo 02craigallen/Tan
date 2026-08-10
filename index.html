@@ -33055,6 +33055,38 @@ function demoStatus(str) {
     return "green";
 }
 const STATUS_COLOR = { green: GREEN, amber: AMBER, red: RED };
+const DEMO_TEAM = ["FF Combes", "FF Ryan", "FF Pleasants"];
+function TheoryOverviewGrid({ categories, people, expanded, onToggle }) {
+    const colWidth = 46;
+    const gridStyle = { display: "grid", gridTemplateColumns: `minmax(220px, 2fr) repeat(${people.length}, ${colWidth}px)` };
+    const cornerStyle = { position: "sticky", top: 0, left: 0, zIndex: 3, background: PANEL };
+    const headerCellStyle = { position: "sticky", top: 0, zIndex: 2, background: PANEL, borderBottom: `1px solid ${LINE}`, borderLeft: `1px solid ${LINE}`, height: 130, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "8px 0" };
+    const nameCellStyle = { position: "sticky", left: 0, zIndex: 1, background: PANEL, borderBottom: `1px solid ${LINE}`, padding: "8px 10px", fontSize: 13, display: "flex", alignItems: "center" };
+    const items = [];
+    items.push(React.createElement("div", { key: "corner", style: { ...cornerStyle, borderBottom: `1px solid ${LINE}` } }));
+    people.forEach((p) => {
+        items.push(React.createElement("div", { key: "hdr-" + p.id, style: headerCellStyle },
+            React.createElement("span", { style: { writingMode: "vertical-rl", transform: "rotate(180deg)", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" } }, p.name)));
+    });
+    categories.forEach((cat) => {
+        items.push(React.createElement("button", { key: "div-" + cat.key, onClick: () => onToggle(cat.key), style: { gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 8, background: PANEL_RAISED, border: "none", borderTop: `1px solid ${LINE}`, borderBottom: `1px solid ${LINE}`, padding: "9px 10px", fontWeight: 600, fontSize: 13.5, cursor: "pointer", textAlign: "left" } },
+            React.createElement(ChevronRight, { size: 14, color: MUTED, style: { transform: expanded[cat.key] ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 } }),
+            cat.name,
+            React.createElement("span", { style: { color: MUTED, fontWeight: 500, fontSize: 12 } }, "· ", cat.items.length)));
+        if (!expanded[cat.key])
+            return;
+        cat.items.forEach((item) => {
+            items.push(React.createElement("div", { key: "name-" + cat.key + "-" + item, style: nameCellStyle }, item));
+            people.forEach((p) => {
+                const status = demoStatus(item + "::" + p.id);
+                items.push(React.createElement("div", { key: "cell-" + cat.key + "-" + item + "-" + p.id, style: { display: "flex", alignItems: "center", justifyContent: "center", borderBottom: `1px solid ${LINE}`, borderLeft: `1px solid ${LINE}` } },
+                    React.createElement("span", { title: status, style: { width: 18, height: 18, borderRadius: 3, background: STATUS_COLOR[status] } })));
+            });
+        });
+    });
+    return React.createElement("div", { style: { border: `1px solid ${LINE}`, borderRadius: 10, overflow: "auto", maxHeight: "72vh", background: PANEL } },
+        React.createElement("div", { style: gridStyle }, items));
+}
 function TheoryItemRow({ text }) {
     const status = demoStatus(text);
     return (React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 4px", borderBottom: `1px solid ${LINE}`, fontSize: 13.5 } },
@@ -33069,8 +33101,23 @@ function TheoryCategorySection({ category, expanded, onToggle }) {
         expanded && React.createElement("div", { style: { padding: "0 16px 8px" } }, category.items.map((item) => React.createElement(TheoryItemRow, { key: item, text: item })))));
 }
 function TheoryModule({ onBack }) {
+    const PEOPLE_KEY = "people:list";
     const [expanded, setExpanded] = useState({});
     const [query, setQuery] = useState("");
+    const [viewMode, setViewMode] = useState("single");
+    const [people, setPeople] = useState(null);
+    useEffect(() => {
+        (async () => {
+            try {
+                const r = await window.storage.get(PEOPLE_KEY, true);
+                setPeople(r ? JSON.parse(r.value) : []);
+            }
+            catch {
+                setPeople([]);
+            }
+        })();
+    }, []);
+    const overviewPeople = people && people.length > 0 ? people.map((p) => ({ id: p.id, name: p.name })) : DEMO_TEAM.map((n) => ({ id: n, name: n }));
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
         if (!q)
@@ -33111,13 +33158,19 @@ function TheoryModule({ onBack }) {
                     React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 5 } }, React.createElement("span", { style: { width: 12, height: 12, borderRadius: 3, background: GREEN, display: "inline-block" } }), "Up to date"),
                     React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 5 } }, React.createElement("span", { style: { width: 12, height: 12, borderRadius: 3, background: AMBER, display: "inline-block" } }), "Coming up for renewal"),
                     React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 5 } }, React.createElement("span", { style: { width: 12, height: 12, borderRadius: 3, background: RED, display: "inline-block" } }), "Overdue / not signed off"))),
+            React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 16, background: PANEL_RAISED, border: `1px solid ${LINE}`, borderRadius: 8, padding: 4, width: "fit-content" } },
+                React.createElement("button", { onClick: () => setViewMode("single"), style: { background: viewMode === "single" ? PANEL : "none", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 13, fontWeight: 600, color: viewMode === "single" ? INK : MUTED, cursor: "pointer" } }, "My view"),
+                React.createElement("button", { onClick: () => setViewMode("overview"), style: { background: viewMode === "overview" ? PANEL : "none", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 13, fontWeight: 600, color: viewMode === "overview" ? INK : MUTED, cursor: "pointer" } }, "Team overview")),
+            viewMode === "overview" && overviewPeople.length > 0 && people && people.length === 0 && (React.createElement("div", { style: { fontSize: 12.5, color: MUTED, marginBottom: 12 } }, "No staff on file yet, so this is showing three placeholder names (", DEMO_TEAM.join(", "), ") — add real staff under Personal Info and they'll appear here instead.")),
             React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" } },
                 React.createElement("input", { value: query, onChange: (e) => setQuery(e.target.value), placeholder: "Search theory items…", style: { ...inputStyle, maxWidth: 280 } }),
                 React.createElement("button", { onClick: expandAll, style: { background: "none", border: `1px solid ${LINE}`, color: INK, padding: "9px 14px", borderRadius: 6, fontSize: 13 } }, "Expand all"),
                 React.createElement("button", { onClick: collapseAll, style: { background: "none", border: `1px solid ${LINE}`, color: INK, padding: "9px 14px", borderRadius: 6, fontSize: 13 } }, "Collapse all")),
             filtered.length === 0
                 ? React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "No matching items.")
-                : filtered.map((c) => React.createElement(TheoryCategorySection, { key: c.key, category: c, expanded: query.trim() ? true : !!expanded[c.key], onToggle: () => toggle(c.key) })))));
+                : viewMode === "single"
+                    ? filtered.map((c) => React.createElement(TheoryCategorySection, { key: c.key, category: c, expanded: query.trim() ? true : !!expanded[c.key], onToggle: () => toggle(c.key) }))
+                    : React.createElement(TheoryOverviewGrid, { categories: filtered, people: overviewPeople, expanded: query.trim() ? Object.fromEntries(filtered.map((c) => [c.key, true])) : expanded, onToggle: toggle }))));
 }
 
 var root = ReactDOM.createRoot(document.getElementById("root"));
