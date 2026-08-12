@@ -32885,7 +32885,7 @@ function Dashboard({ onOpen }) {
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginTop: 34 } },
                 React.createElement(ModuleCard, { eyebrow: "Equipment", title: "EMS", desc: "Test schedules, sign-offs, and full accountability history for every piece of station equipment.", icon: React.createElement(Wrench, { size: 22 }), color: RED, live: true, onClick: () => onOpen("ems") }),
                 React.createElement(ModuleCard, { eyebrow: "Equipment", title: "FAFAs", desc: "Fire extinguishers across every building on the airport, organised by location, with test dates and QR tags.", icon: React.createElement(Flame, { size: 22 }), color: "#AF3A22", live: true, onClick: () => onOpen("fafa") }),
-                React.createElement(ModuleCard, { eyebrow: "Watch Room", title: "Watch Log", desc: "A permanent, timestamped record of the day — who logged what, and when. Nothing can be edited or removed once entered.", icon: React.createElement(FileText, { size: 22 }), color: "#2E6E7E", live: true, onClick: () => onOpen("watchlog") }),
+                React.createElement(ModuleCard, { eyebrow: "Watch Room", title: "Watchroom Log", desc: "A permanent, timestamped record of the day — who logged what, and when. Nothing can be edited or removed once entered.", icon: React.createElement(FileText, { size: 22 }), color: "#2E6E7E", live: true, onClick: () => onOpen("watchlog") }),
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Practical", desc: "Log practical activities and evidence — formal sign-off against versioned criteria comes next.", icon: React.createElement(ClipboardCheck, { size: 22 }), color: AMBER, live: true, onClick: () => onOpen("practical") }),
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Theory", desc: "Self-declared understanding, gated behind reading the material. Concept preview of the full item list available now.", icon: React.createElement(BookOpen, { size: 22 }), color: GREEN, badge: "Preview", onClick: () => onOpen("theory") }),
                 React.createElement(ModuleCard, { eyebrow: "Records", title: "Personal Info", desc: "Payroll number, contact details, and emergency contact for each firefighter.", icon: React.createElement(User, { size: 22 }), color: "#6B5B95", live: true, onClick: () => onOpen("personal") }),
@@ -33387,10 +33387,11 @@ function watchLogDayLabel(dateStr) {
     return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 function WatchLogEntry({ entry }) {
+    const inkColor = entry.color === "red" ? RED : INK;
     return React.createElement("div", { style: { display: "flex", gap: 14, padding: "12px 0", borderBottom: `1px solid ${LINE}` } },
         React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 12, color: MUTED, width: 52, flexShrink: 0, paddingTop: 2 } }, entry.time),
         React.createElement("div", { style: { flex: 1 } },
-            React.createElement("div", { style: { fontSize: 14.5, lineHeight: 1.5, whiteSpace: "pre-wrap" } }, entry.text),
+            React.createElement("div", { style: { fontSize: 14.5, lineHeight: 1.5, whiteSpace: "pre-wrap", color: inkColor } }, entry.text),
             React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 4 } }, entry.enteredBy)));
 }
 function WatchLogModule({ onBack }) {
@@ -33399,6 +33400,7 @@ function WatchLogModule({ onBack }) {
     const [error, setError] = useState(null);
     const [viewDate, setViewDate] = useState(todayISO());
     const [text, setText] = useState("");
+    const [color, setColor] = useState("black");
     const [busy, setBusy] = useState(false);
     useEffect(() => {
         (async () => {
@@ -33420,6 +33422,7 @@ function WatchLogModule({ onBack }) {
         const entry = {
             id: uid(),
             text: trimmed,
+            color,
             enteredBy: (currentUser && currentUser.name) || "Unknown",
             date: todayISO(),
             time: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
@@ -33428,6 +33431,7 @@ function WatchLogModule({ onBack }) {
         const next = [...entries, entry];
         setEntries(next);
         setText("");
+        setColor("black");
         try {
             await window.storage.set(WATCHLOG_KEY, JSON.stringify(next), true);
         }
@@ -33467,8 +33471,20 @@ function WatchLogModule({ onBack }) {
         dayEntries.length === 0
             ? React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "24px 0", textAlign: "center" } }, isToday ? "Nothing logged yet today." : "Nothing was logged this day.")
             : entryRows);
+    const colorOption = (value, label) => React.createElement("button", { key: value, type: "button", onClick: () => setColor(value), style: {
+            display: "flex", alignItems: "center", gap: 6,
+            background: color === value ? PANEL_RAISED : "none",
+            border: `1px solid ${color === value ? INK : LINE}`,
+            borderRadius: 20, padding: "5px 12px", fontSize: 12.5, fontWeight: 600, color: INK,
+        } },
+        React.createElement("span", { style: { width: 10, height: 10, borderRadius: "50%", background: value === "red" ? RED : INK, display: "inline-block" } }),
+        label);
     const addForm = isToday && React.createElement("form", { className: "watchlog-noprint", onSubmit: addEntry, style: { marginTop: 16, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 16 } },
         React.createElement("textarea", { value: text, onChange: (e) => setText(e.target.value), placeholder: "Write what happened…", rows: 3, style: { ...inputStyle, resize: "vertical" } }),
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 10 } },
+            React.createElement("span", { style: { fontSize: 11.5, color: MUTED } }, "Ink:"),
+            colorOption("black", "Black"),
+            colorOption("red", "Red")),
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 } },
             React.createElement("div", { style: { fontSize: 11.5, color: MUTED } }, "This can't be edited or removed once entered — write it as you want it on record."),
             React.createElement("button", { type: "submit", disabled: !text.trim() || busy, style: { ...primaryBtn, opacity: text.trim() && !busy ? 1 : 0.5, cursor: text.trim() && !busy ? "pointer" : "not-allowed" } }, "Add entry")));
