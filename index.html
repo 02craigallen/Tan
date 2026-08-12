@@ -31965,7 +31965,7 @@ function TagCard({ item, categories, onClick, onEdit, selectMode, selected, onTo
                 ? RED
                 : GREEN;
     const dueColor = state === "overdue" ? RED : state === "soon" ? AMBER : MUTED;
-    return (React.createElement("button", { onClick: selectMode ? onToggleSelect : onClick, style: {
+    return (React.createElement("div", { onClick: selectMode ? onToggleSelect : onClick, role: "button", tabIndex: 0, onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); (selectMode ? onToggleSelect : onClick)(); } }, style: {
             textAlign: "left",
             background: PANEL,
             border: `1px solid ${selectMode && selected ? RED : LINE}`,
@@ -31976,6 +31976,7 @@ function TagCard({ item, categories, onClick, onEdit, selectMode, selected, onTo
             overflow: "hidden",
             opacity: item.withdrawn ? 0.6 : 1,
             boxShadow: selectMode && selected ? `0 0 0 2px ${RED}` : "none",
+            cursor: "pointer",
         } },
         selectMode && (React.createElement("div", { style: {
                 position: "absolute",
