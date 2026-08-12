@@ -31270,6 +31270,7 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
     const [locations, setLocations] = useState(null);
     const [showManageLocations, setShowManageLocations] = useState(false);
     const [editTestTypeFor, setEditTestTypeFor] = useState(null); // { equipment, testType }
+    const [addTestTypeFor, setAddTestTypeFor] = useState(null); // equipment
     const [editUnitFor, setEditUnitFor] = useState(null); // { equipment, unit }
     useEffect(() => {
         (async () => {
@@ -31414,7 +31415,8 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
         persistEquipment([...equipment, item]);
         setShowAdd(false);
     }
-    function submitSignoff({ equipment: eq, testType, unit, status, signedBy, location, notes }) {
+    function submitSignoff({ equipment: eq, testType, unit, status, signedBy, location, notes, date }) {
+        const signoffDate = date || todayISO();
         const entry = {
             id: uid(),
             equipmentId: eq.id,
@@ -31423,7 +31425,7 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
             unitLabel: unit ? unit.label : null,
             testTypeId: testType.id,
             testTypeName: testType.name,
-            date: todayISO(),
+            date: signoffDate,
             time: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
             signedBy,
             status,
@@ -31440,13 +31442,13 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
                         return u;
                     return {
                         ...u,
-                        testStatus: { ...(u.testStatus || {}), [testType.id]: todayISO() },
+                        testStatus: { ...(u.testStatus || {}), [testType.id]: signoffDate },
                         status: status === "unserviceable" ? "unserviceable" : u.status,
                     };
                 });
                 return { ...e, units };
             }
-            const testTypes = e.testTypes.map((t) => (t.id === testType.id ? { ...t, lastCompleted: todayISO() } : t));
+            const testTypes = e.testTypes.map((t) => (t.id === testType.id ? { ...t, lastCompleted: signoffDate } : t));
             const newStatus = status === "unserviceable" ? "unserviceable" : e.status;
             return { ...e, testTypes, status: newStatus, location: location || e.location };
         });
@@ -31528,6 +31530,13 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
         const next = equipment.map((e) => e.id === eq.id ? { ...e, testTypes: e.testTypes.map((t) => (t.id === testTypeId ? { ...t, ...updates } : t)) } : e);
         persistEquipment(next);
         setSelected((s) => (s ? next.find((e) => e.id === s.id) : s));
+    }
+    function addTestType(eq, { name, intervalDays }) {
+        const newTestType = { id: uid(), name, intervalDays, lastCompleted: null };
+        const next = equipment.map((e) => e.id === eq.id ? { ...e, testTypes: [...e.testTypes, newTestType] } : e);
+        persistEquipment(next);
+        setSelected((s) => (s ? next.find((e) => e.id === s.id) : s));
+        setAddTestTypeFor(null);
     }
     function updateUnit(eq, unitId, updates) {
         const next = equipment.map((e) => e.id === eq.id ? { ...e, units: e.units.map((u) => (u.id === unitId ? { ...u, ...updates } : u)) } : e);
@@ -31616,7 +31625,8 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
                             });
                         } }))),
                     filtered.length === 0 && (React.createElement("div", { style: { gridColumn: "1/-1", padding: 40, textAlign: "center", color: MUTED, border: `1px dashed ${LINE}`, borderRadius: 10 } }, "Nothing matches. Adjust the filters, or add a new item to the register.")))))),
-        selected && (React.createElement(DetailDrawer, { item: selected, log: log.filter((l) => l.equipmentId === selected.id), onClose: () => setSelected(null), onSignoff: (testType, unit) => setSignoffFor({ equipment: selected, testType, unit }), onReactivate: () => reactivate(selected), onViewQr: (target) => setQrFor(target || selected), onToggleWithdrawn: () => toggleWithdrawn(selected), onPhotoChange: (photo) => updatePhoto(selected, photo), onRemoveTestType: (testType) => removeTestType(selected, testType), onEditTestType: (testType) => setEditTestTypeFor({ equipment: selected, testType }), onEditUnit: (unit) => setEditUnitFor({ equipment: selected, unit }), onUpdateTires: (tires) => updateTires(selected, tires) })),
+        selected && (React.createElement(DetailDrawer, { item: selected, log: log.filter((l) => l.equipmentId === selected.id), onClose: () => setSelected(null), onSignoff: (testType, unit) => setSignoffFor({ equipment: selected, testType, unit }), onReactivate: () => reactivate(selected), onViewQr: (target) => setQrFor(target || selected), onToggleWithdrawn: () => toggleWithdrawn(selected), onPhotoChange: (photo) => updatePhoto(selected, photo), onRemoveTestType: (testType) => removeTestType(selected, testType), onEditTestType: (testType) => setEditTestTypeFor({ equipment: selected, testType }), onAddTestType: () => setAddTestTypeFor(selected), onEditUnit: (unit) => setEditUnitFor({ equipment: selected, unit }), onUpdateTires: (tires) => updateTires(selected, tires) })),
+        addTestTypeFor && (React.createElement(AddTestTypeModal, { equipment: addTestTypeFor, onCancel: () => setAddTestTypeFor(null), onSave: (values) => addTestType(addTestTypeFor, values) })),
         editTestTypeFor && (React.createElement(EditTestTypeModal, { equipment: editTestTypeFor.equipment, testType: editTestTypeFor.testType, onCancel: () => setEditTestTypeFor(null), onSave: (updates) => {
                 updateTestType(editTestTypeFor.equipment, editTestTypeFor.testType.id, updates);
                 setEditTestTypeFor(null);
@@ -32003,7 +32013,8 @@ function TagCard({ item, categories, onClick, onEdit, selectMode, selected, onTo
             React.createElement(ChevronRight, { size: 16, color: MUTED }))));
 }
 // ---------- detail drawer ----------
-function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, onToggleWithdrawn, onPhotoChange, onRemoveTestType, onEditTestType, onEditUnit, onUpdateTires }) {
+function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, onToggleWithdrawn, onPhotoChange, onRemoveTestType, onEditTestType, onAddTestType, onEditUnit, onUpdateTires }) {
+    const isAdmin = currentUser && currentUser.role === "admin";
     const [photoBusy, setPhotoBusy] = useState(false);
     async function handlePhotoUpload(e) {
         const file = e.target.files && e.target.files[0];
@@ -32019,6 +32030,64 @@ function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, o
         }
         setPhotoBusy(false);
     }
+    const addTestTypeBtn = isAdmin && React.createElement("button", { onClick: onAddTestType, style: {
+            display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px dashed ${LINE}`,
+            color: RED, padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, marginTop: 8, cursor: "pointer",
+        } },
+        React.createElement(Plus, { size: 14 }),
+        " Add test type");
+    const unitTestTypeRows = item.testTypes && item.testTypes.map((t) => React.createElement("div", { key: t.id, style: {
+            background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "9px 12px",
+            display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
+        } },
+        React.createElement("div", null,
+            React.createElement("div", { style: { fontWeight: 600, fontSize: 13.5 } }, t.name),
+            React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 2 } },
+                "Every ",
+                t.intervalDays === 1 ? "day" : `${t.intervalDays} days`)),
+        React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0 } },
+            React.createElement("button", { onClick: () => onEditTestType(t), title: "Edit this test type", style: { background: "none", border: `1px solid ${LINE}`, color: MUTED, padding: "6px 9px", borderRadius: 6, display: "flex", alignItems: "center" } },
+                React.createElement(Pencil, { size: 12 })),
+            React.createElement("button", { onClick: () => onRemoveTestType(t), title: "Remove this test type", style: { background: "none", border: `1px solid ${LINE}`, color: MUTED, padding: "6px 9px", borderRadius: 6, display: "flex", alignItems: "center" } },
+                React.createElement(X, { size: 12 })))));
+    const unitsTestTypesSection = React.createElement(React.Fragment, null,
+        React.createElement("div", { style: { marginTop: 26 } },
+            React.createElement(SectionLabel, null, "Test types (applies to every unit)"),
+            React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, marginTop: 10 } }, unitTestTypeRows),
+            addTestTypeBtn),
+        React.createElement(UnitsSection, { item: item, onSignoff: onSignoff, onViewUnitQr: onViewQr, onEditUnit: onEditUnit }));
+    const flatTestTypeRows = item.testTypes && item.testTypes.map((t) => {
+        const info = dueInfo(t);
+        const color = info.state === "overdue" ? RED : info.state === "soon" ? AMBER : MUTED;
+        return React.createElement("div", { key: t.id, style: {
+                background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "12px 14px",
+                display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
+            } },
+            React.createElement("div", null,
+                React.createElement("div", { style: { fontWeight: 600, fontSize: 14 } }, t.name),
+                React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 3 } },
+                    "Every ",
+                    t.intervalDays === 1 ? "day" : `${t.intervalDays} days`,
+                    " · Last: ",
+                    t.lastCompleted ? fmt(t.lastCompleted) : "never"),
+                React.createElement("div", { style: { fontSize: 12, color, marginTop: 3, fontWeight: 600 } }, info.label)),
+            React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0 } },
+                React.createElement("button", { onClick: () => onSignoff(t), style: {
+                        background: PANEL_RAISED, border: `1px solid ${LINE}`, color: INK, padding: "7px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap",
+                    } }, "Sign off"),
+                React.createElement("button", { onClick: () => onEditTestType(t), title: "Edit this test type", style: {
+                        background: "none", border: `1px solid ${LINE}`, color: MUTED, padding: "7px 9px", borderRadius: 6, display: "flex", alignItems: "center",
+                    } },
+                    React.createElement(Pencil, { size: 14 })),
+                React.createElement("button", { onClick: () => onRemoveTestType(t), title: "Remove this test type", style: {
+                        background: "none", border: `1px solid ${LINE}`, color: MUTED, padding: "7px 9px", borderRadius: 6, display: "flex", alignItems: "center",
+                    } },
+                    React.createElement(X, { size: 14 }))));
+    });
+    const flatTestTypesSection = React.createElement("div", { style: { marginTop: 26 } },
+        React.createElement(SectionLabel, null, "Test types"),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginTop: 10 } }, flatTestTypeRows),
+        addTestTypeBtn);
     return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 40 } },
         React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" } }),
         React.createElement("div", { style: {
@@ -32036,11 +32105,11 @@ function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, o
                 React.createElement("div", null,
                     React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 1.5, color: MUTED, textTransform: "uppercase" } },
                         item.category,
-                        " \u2014 ",
+                        " — ",
                         categoryLabel(item.category),
-                        " \u00B7 ",
+                        " · ",
                         item.location,
-                        " \u00B7 ",
+                        " · ",
                         item.assetId),
                     React.createElement("h2", { style: { fontFamily: DISPLAY_FONT, fontSize: 26, margin: "4px 0 0", fontWeight: 600 } }, item.name)),
                 React.createElement("button", { onClick: onClose, style: { background: "none", border: "none", color: MUTED } },
@@ -32057,7 +32126,7 @@ function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, o
                 } },
                 item.photo ? "Change photo" : "Add a photo",
                 React.createElement("input", { type: "file", accept: "image/*", onChange: handlePhotoUpload, style: { display: "none" } })),
-            photoBusy && React.createElement("div", { style: { fontSize: 12, color: MUTED } }, "Processing photo\u2026"),
+            photoBusy && React.createElement("div", { style: { fontSize: 12, color: MUTED } }, "Processing photo…"),
             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 14, flexWrap: "wrap" } },
                 React.createElement("span", { style: {
                         display: "inline-flex",
@@ -32116,85 +32185,7 @@ function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, o
                 React.createElement(InfoRow, { label: "Other no.", value: item.otherNo }),
                 React.createElement(InfoRow, { label: "Location", value: item.location })),
             TIRE_MONITORED_ASSET_IDS.has(item.assetId) && React.createElement(TirePanel, { tires: item.tires || defaultTires(), onSave: onUpdateTires }),
-            item.units ? (React.createElement(React.Fragment, null,
-                React.createElement("div", { style: { marginTop: 26 } },
-                    React.createElement(SectionLabel, null, "Test types (applies to every unit)"),
-                    React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, marginTop: 10 } }, item.testTypes.map((t) => (React.createElement("div", { key: t.id, style: {
-                            background: PANEL,
-                            border: `1px solid ${LINE}`,
-                            borderRadius: 8,
-                            padding: "9px 12px",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: 10,
-                        } },
-                        React.createElement("div", null,
-                            React.createElement("div", { style: { fontWeight: 600, fontSize: 13.5 } }, t.name),
-                            React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 2 } },
-                                "Every ",
-                                t.intervalDays === 1 ? "day" : `${t.intervalDays} days`)),
-                        React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0 } },
-                            React.createElement("button", { onClick: () => onEditTestType(t), title: "Edit this test type", style: { background: "none", border: `1px solid ${LINE}`, color: MUTED, padding: "6px 9px", borderRadius: 6, display: "flex", alignItems: "center" } },
-                                React.createElement(Pencil, { size: 12 })),
-                            React.createElement("button", { onClick: () => onRemoveTestType(t), title: "Remove this test type", style: { background: "none", border: `1px solid ${LINE}`, color: MUTED, padding: "6px 9px", borderRadius: 6, display: "flex", alignItems: "center" } },
-                                React.createElement(X, { size: 12 })))))))),
-                React.createElement(UnitsSection, { item: item, onSignoff: onSignoff, onViewUnitQr: onViewQr, onEditUnit: onEditUnit }))) : (React.createElement("div", { style: { marginTop: 26 } },
-                React.createElement(SectionLabel, null, "Test types"),
-                React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginTop: 10 } }, item.testTypes.map((t) => {
-                    const info = dueInfo(t);
-                    const color = info.state === "overdue" ? RED : info.state === "soon" ? AMBER : MUTED;
-                    return (React.createElement("div", { key: t.id, style: {
-                            background: PANEL,
-                            border: `1px solid ${LINE}`,
-                            borderRadius: 8,
-                            padding: "12px 14px",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: 12,
-                        } },
-                        React.createElement("div", null,
-                            React.createElement("div", { style: { fontWeight: 600, fontSize: 14 } }, t.name),
-                            React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 3 } },
-                                "Every ",
-                                t.intervalDays === 1 ? "day" : `${t.intervalDays} days`,
-                                " \u00B7 Last:",
-                                " ",
-                                t.lastCompleted ? fmt(t.lastCompleted) : "never"),
-                            React.createElement("div", { style: { fontSize: 12, color, marginTop: 3, fontWeight: 600 } }, info.label)),
-                        React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0 } },
-                            React.createElement("button", { onClick: () => onSignoff(t), style: {
-                                    background: PANEL_RAISED,
-                                    border: `1px solid ${LINE}`,
-                                    color: INK,
-                                    padding: "7px 12px",
-                                    borderRadius: 6,
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                    whiteSpace: "nowrap",
-                                } }, "Sign off"),
-                            React.createElement("button", { onClick: () => onEditTestType(t), title: "Edit this test type", style: {
-                                    background: "none",
-                                    border: `1px solid ${LINE}`,
-                                    color: MUTED,
-                                    padding: "7px 9px",
-                                    borderRadius: 6,
-                                    display: "flex",
-                                    alignItems: "center",
-                                } },
-                                React.createElement(Pencil, { size: 14 })),
-                            React.createElement("button", { onClick: () => onRemoveTestType(t), title: "Remove this test type", style: {
-                                    background: "none",
-                                    border: `1px solid ${LINE}`,
-                                    color: MUTED,
-                                    padding: "7px 9px",
-                                    borderRadius: 6,
-                                    display: "flex",
-                                    alignItems: "center",
-                                } },
-                                React.createElement(X, { size: 14 })))));
-                })))),
+            item.units ? unitsTestTypesSection : flatTestTypesSection,
             React.createElement("div", { style: { marginTop: 28 } },
                 React.createElement(SectionLabel, { icon: React.createElement(History, { size: 13 }) }, "Sign-off history"),
                 React.createElement("div", { style: { marginTop: 10, display: "flex", flexDirection: "column", gap: 8 } },
@@ -32204,7 +32195,7 @@ function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, o
                             React.createElement("span", { style: { fontWeight: 600 } },
                                 l.testTypeName,
                                 l.unitLabel && React.createElement("span", { style: { color: MUTED, fontWeight: 500 } },
-                                    " \u00B7 ",
+                                    " · ",
                                     l.unitLabel)),
                             React.createElement("span", { style: { fontFamily: MONO_FONT, fontSize: 11, color: MUTED } },
                                 fmt(l.date),
@@ -32212,9 +32203,9 @@ function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, o
                                 l.time)),
                         React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 2 } },
                             l.signedBy,
-                            " \u00B7 marked ",
+                            " · marked ",
                             React.createElement("span", { style: { color: l.status === "unserviceable" ? RED : GREEN, fontWeight: 600 } }, l.status),
-                            " \u00B7 ",
+                            " · ",
                             l.location),
                         l.notes && React.createElement("div", { style: { fontSize: 12, color: INK, marginTop: 4, fontStyle: "italic" } },
                             "\"",
@@ -32354,12 +32345,15 @@ function SignoffModal({ equipment, testType, unit, locations, onCancel, onSubmit
     const locList = locations || LOCATIONS;
     const [status, setStatus] = useState("serviceable");
     const [signedBy, setSignedBy] = useState(() => (currentUser && currentUser.name) || "");
+    const [date, setDate] = useState(todayISO());
     const [location, setLocation] = useState(equipment.location);
     const [notes, setNotes] = useState("");
-    const canSubmit = signedBy.trim().length > 0;
+    const canSubmit = signedBy.trim().length > 0 && date;
     return (React.createElement(ModalShell, { title: `Sign off · ${testType.name}`, subtitle: unit ? `${equipment.name} · ${unit.label}` : equipment.name, onCancel: onCancel },
         React.createElement(Field, { label: "Signed off by" },
             React.createElement(SignedByField, { value: signedBy, onChange: setSignedBy })),
+        React.createElement(Field, { label: "Date" },
+            React.createElement("input", { type: "date", value: date, max: todayISO(), onChange: (e) => setDate(e.target.value), style: inputStyle })),
         React.createElement(Field, { label: "Status" },
             React.createElement("div", { style: { display: "flex", gap: 8 } }, ["serviceable", "unserviceable"].map((s) => (React.createElement("button", { key: s, onClick: () => setStatus(s), style: {
                     flex: 1,
@@ -32377,9 +32371,34 @@ function SignoffModal({ equipment, testType, unit, locations, onCancel, onSubmit
         React.createElement(Field, { label: "Notes (optional)" },
             React.createElement("textarea", { value: notes, onChange: (e) => setNotes(e.target.value), rows: 3, placeholder: "Anything worth flagging\u2026", style: { ...inputStyle, resize: "vertical" } })),
         React.createElement(ModalActions, { onCancel: onCancel },
-            React.createElement("button", { disabled: !canSubmit, onClick: () => onSubmit({ equipment, testType, unit, status, signedBy: signedBy.trim(), location, notes: notes.trim() }), style: { ...primaryBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" } }, "Confirm sign-off"))));
+            React.createElement("button", { disabled: !canSubmit, onClick: () => onSubmit({ equipment, testType, unit, status, signedBy: signedBy.trim(), location, notes: notes.trim(), date }), style: { ...primaryBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" } }, "Confirm sign-off"))));
 }
 // ---------- add equipment modal ----------
+function AddTestTypeModal({ equipment, onCancel, onSave }) {
+    const [name, setName] = useState("");
+    const [intervalDays, setIntervalDays] = useState(7);
+    const canSave = name.trim().length > 0;
+    const presets = [
+        { label: "Daily", value: 1 }, { label: "Weekly", value: 7 }, { label: "Monthly", value: 30 },
+        { label: "Quarterly", value: 90 }, { label: "Six Monthly", value: 180 }, { label: "Annual", value: 365 },
+    ];
+    const matchesPreset = presets.some((p) => p.value === Number(intervalDays));
+    return (React.createElement(ModalShell, { title: "Add test type", subtitle: equipment.name, onCancel: onCancel },
+        React.createElement(Field, { label: "Test name" },
+            React.createElement("input", { value: name, onChange: (e) => setName(e.target.value), placeholder: "e.g. Weekly Visual Check", style: inputStyle })),
+        React.createElement(Field, { label: "Interval" },
+            React.createElement("select", { value: matchesPreset ? intervalDays : "custom", onChange: (e) => e.target.value !== "custom" && setIntervalDays(Number(e.target.value)), style: inputStyle },
+                presets.map((p) => (React.createElement("option", { key: p.value, value: p.value },
+                    p.label,
+                    " (",
+                    p.value,
+                    " days)"))),
+                React.createElement("option", { value: "custom" }, "Custom…"))),
+        !matchesPreset && (React.createElement(Field, { label: "Custom interval (days)" },
+            React.createElement("input", { type: "number", min: "1", value: intervalDays, onChange: (e) => setIntervalDays(Number(e.target.value) || 1), style: inputStyle }))),
+        React.createElement(ModalActions, { onCancel: onCancel },
+            React.createElement("button", { disabled: !canSave, onClick: () => onSave({ name: name.trim(), intervalDays }), style: { ...primaryBtn, opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" } }, "Add test type"))));
+}
 function EditTestTypeModal({ equipment, testType, onCancel, onSave }) {
     const [name, setName] = useState(testType.name);
     const [intervalDays, setIntervalDays] = useState(testType.intervalDays);
@@ -32910,8 +32929,9 @@ function EditFafaModal({ item, buildings, onCancel, onSave }) {
 function FafaSignoffModal({ item, testType, onCancel, onSubmit }) {
     const [status, setStatus] = useState("serviceable");
     const [signedBy, setSignedBy] = useState(() => (currentUser && currentUser.name) || "");
+    const [date, setDate] = useState(todayISO());
     const [notes, setNotes] = useState("");
-    const canSubmit = signedBy.trim().length > 0;
+    const canSubmit = signedBy.trim().length > 0 && date;
     const statusBtns = ["serviceable", "unserviceable"].map((s) => React.createElement("button", { key: s, onClick: () => setStatus(s), style: {
             flex: 1,
             padding: "10px",
@@ -32926,12 +32946,14 @@ function FafaSignoffModal({ item, testType, onCancel, onSubmit }) {
     return (React.createElement(ModalShell, { title: `Sign off · ${testType.name}`, subtitle: `${item.assetId} · ${item.building}`, onCancel: onCancel },
         React.createElement(Field, { label: "Signed off by" },
             React.createElement(SignedByField, { value: signedBy, onChange: setSignedBy })),
+        React.createElement(Field, { label: "Date" },
+            React.createElement("input", { type: "date", value: date, max: todayISO(), onChange: (e) => setDate(e.target.value), style: inputStyle })),
         React.createElement(Field, { label: "Status" },
             React.createElement("div", { style: { display: "flex", gap: 8 } }, statusBtns)),
         React.createElement(Field, { label: "Notes (optional)" },
             React.createElement("textarea", { value: notes, onChange: (e) => setNotes(e.target.value), rows: 3, placeholder: "Anything worth flagging…", style: { ...inputStyle, resize: "vertical" } })),
         React.createElement(ModalActions, { onCancel: onCancel },
-            React.createElement("button", { disabled: !canSubmit, onClick: () => onSubmit({ testType, status, signedBy: signedBy.trim(), notes: notes.trim() }), style: { ...primaryBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" } }, "Confirm sign-off"))));
+            React.createElement("button", { disabled: !canSubmit, onClick: () => onSubmit({ testType, status, signedBy: signedBy.trim(), notes: notes.trim(), date }), style: { ...primaryBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" } }, "Confirm sign-off"))));
 }
 function FafaBuildingRow({ building, count, overdue, soon, onClick }) {
     return React.createElement("button", { onClick: onClick, style: { width: "100%", textAlign: "left", background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" } },
@@ -33205,11 +33227,12 @@ function FafaModule({ onBack, focusAssetId, onFocusHandled }) {
         updateSelected({ ...item, testTypes: item.testTypes.map((t) => (t.id === testTypeId ? { ...t, ...updates } : t)) });
         setEditTestTypeFor(null);
     }
-    function submitSignoff({ testType, status, signedBy, notes }) {
+    function submitSignoff({ testType, status, signedBy, notes, date }) {
         const item = signoffFor.item;
-        const nextTestTypes = item.testTypes.map((t) => (t.id === testType.id ? { ...t, lastCompleted: todayISO() } : t));
+        const signoffDate = date || todayISO();
+        const nextTestTypes = item.testTypes.map((t) => (t.id === testType.id ? { ...t, lastCompleted: signoffDate } : t));
         updateSelected({ ...item, status, testTypes: nextTestTypes });
-        const entry = { id: uid(), fafaId: item.id, testTypeId: testType.id, testTypeName: testType.name, status, signedBy, notes, date: todayISO() };
+        const entry = { id: uid(), fafaId: item.id, testTypeId: testType.id, testTypeName: testType.name, status, signedBy, notes, date: signoffDate };
         persistLog([...log, entry]);
         setSignoffFor(null);
     }
