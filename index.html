@@ -33520,12 +33520,20 @@ function WatchLogModule({ onBack }) {
 // ---------- Riders board ----------
 const RIDERS_BOARD_KEY = "ridersboard:grid";
 const RIDERS_BOARD_COLS = 5;
-const RIDERS_BOARD_ROWS = 7;
+const RIDERS_BOARD_ROWS = 5;
 function blankRidersBoard() {
     return {
         colHeaders: Array(RIDERS_BOARD_COLS).fill(""),
         rowHeaders: Array(RIDERS_BOARD_ROWS).fill(""),
         cells: Array.from({ length: RIDERS_BOARD_ROWS }, () => Array(RIDERS_BOARD_COLS).fill("")),
+    };
+}
+function normalizeRidersBoard(board) {
+    const b = board || blankRidersBoard();
+    return {
+        colHeaders: Array.from({ length: RIDERS_BOARD_COLS }, (_, i) => b.colHeaders[i] || ""),
+        rowHeaders: Array.from({ length: RIDERS_BOARD_ROWS }, (_, i) => b.rowHeaders[i] || ""),
+        cells: Array.from({ length: RIDERS_BOARD_ROWS }, (_, r) => Array.from({ length: RIDERS_BOARD_COLS }, (_, c) => (b.cells[r] && b.cells[r][c]) || "")),
     };
 }
 function RidersBoardPrintTable({ board }) {
@@ -33556,7 +33564,7 @@ function RidersBoardPanel({ onSavedChange }) {
             try {
                 const r = await window.storage.get(RIDERS_BOARD_KEY, true);
                 const loaded = r && r.value ? JSON.parse(r.value) : null;
-                const board = loaded || blankRidersBoard();
+                const board = normalizeRidersBoard(loaded);
                 setSaved(board);
                 setDraft(board);
                 if (onSavedChange) onSavedChange(board);
