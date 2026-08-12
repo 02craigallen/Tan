@@ -31240,7 +31240,10 @@ function addDays(iso, n) {
 }
 function isDueToday(testType) {
     if (!testType.lastCompleted)
-        return true; // never tested — needs doing, counts as due today
+        // Never tested: only daily-cadence checks belong on today's list. A never-done
+        // weekly/monthly/annual check is a backlog item (shows as overdue elsewhere),
+        // not something that floods the daily list until someone gets round to it.
+        return testType.intervalDays <= 1;
     return addDays(testType.lastCompleted, testType.intervalDays) === todayISO();
 }
 // For a grouped item, build a virtual testType per unit x testType, carrying the unit's
