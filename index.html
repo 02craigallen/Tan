@@ -33455,7 +33455,7 @@ function WatchLogModule({ onBack }) {
       @media print {
         .watchlog-noprint { display: none !important; }
       }
-      .watchlog-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }
+      .watchlog-layout { display: grid; grid-template-columns: minmax(0, 1fr) 620px; gap: 24px; align-items: start; }
       @media (max-width: 880px) {
         .watchlog-layout { grid-template-columns: 1fr; }
       }
@@ -33505,7 +33505,7 @@ function WatchLogModule({ onBack }) {
         React.createElement(FontImport, null),
         printStyles,
         React.createElement("div", { className: "watchlog-noprint" }, React.createElement(TopBanner, null)),
-        React.createElement("div", { style: { maxWidth: 1180, margin: "0 auto", padding: "28px 20px 60px", position: "relative" } },
+        React.createElement("div", { style: { maxWidth: 1420, margin: "0 auto", padding: "28px 20px 60px", position: "relative" } },
             header,
             error && React.createElement("div", { className: "watchlog-noprint", style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, marginTop: 16, fontSize: 13 } }, error),
             React.createElement("div", { className: "watchlog-layout", style: { marginTop: 16 } },
@@ -33575,11 +33575,11 @@ function RidersBoardPanel() {
     function discard() {
         setDraft(saved);
     }
-    const cellStyle = { ...inputStyle, textAlign: "center", padding: "6px 2px", fontSize: 12.5 };
-    const headerCellStyle = { ...inputStyle, textAlign: "center", padding: "6px 2px", fontSize: 11.5, fontWeight: 600, background: PANEL_RAISED };
+    const cellStyle = { ...inputStyle, textAlign: "left", padding: "10px 8px", fontSize: 14.5, height: 40, boxSizing: "border-box" };
+    const headerCellStyle = { ...inputStyle, textAlign: "center", padding: "8px 4px", fontSize: 12, fontWeight: 600, background: PANEL_RAISED, height: 40, boxSizing: "border-box" };
     let grid = null;
     if (draft) {
-        const colHeaderCells = draft.colHeaders.map((h, i) => React.createElement("input", { key: "ch" + i, value: h, onChange: (e) => setColHeader(i, e.target.value), placeholder: `P${i + 1}`, style: headerCellStyle }));
+        const colHeaderCells = draft.colHeaders.map((h, i) => React.createElement("input", { key: "ch" + i, value: h, onChange: (e) => setColHeader(i, e.target.value), placeholder: `Position ${i + 1}`, style: headerCellStyle }));
         const cornerCell = React.createElement("div", { key: "corner" });
         const headerRow = React.createElement(React.Fragment, null, cornerCell, colHeaderCells);
         const bodyRows = draft.cells.map((row, r) => {
@@ -33587,7 +33587,7 @@ function RidersBoardPanel() {
             const rowCells = row.map((v, c) => React.createElement("input", { key: r + "-" + c, value: v, onChange: (e) => setCell(r, c, e.target.value), style: cellStyle }));
             return React.createElement(React.Fragment, { key: "row" + r }, rowHeaderCell, rowCells);
         });
-        grid = React.createElement("div", { style: { display: "grid", gridTemplateColumns: `64px repeat(${RIDERS_BOARD_COLS}, 1fr)`, gap: 4, marginTop: 14, minWidth: 360 } }, headerRow, bodyRows);
+        grid = React.createElement("div", { style: { display: "grid", gridTemplateColumns: `72px repeat(${RIDERS_BOARD_COLS}, minmax(100px, 1fr))`, gap: 6, marginTop: 14, minWidth: 570 } }, headerRow, bodyRows);
     }
     return React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 16 } },
         React.createElement("h2", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 18, margin: 0 } }, "Riders Board"),
