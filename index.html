@@ -32858,6 +32858,8 @@ function App() {
                 setFocusAssetId(null);
                 window.history.replaceState({}, "", window.location.pathname);
             } });
+    if (view === "watchlog")
+        return React.createElement(WatchLogModule, { onBack: () => setView("dashboard") });
     if (view === "personal")
         return React.createElement(PersonalInfoModule, { onBack: () => setView("dashboard") });
     if (view === "calendar")
@@ -32883,6 +32885,7 @@ function Dashboard({ onOpen }) {
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginTop: 34 } },
                 React.createElement(ModuleCard, { eyebrow: "Equipment", title: "EMS", desc: "Test schedules, sign-offs, and full accountability history for every piece of station equipment.", icon: React.createElement(Wrench, { size: 22 }), color: RED, live: true, onClick: () => onOpen("ems") }),
                 React.createElement(ModuleCard, { eyebrow: "Equipment", title: "FAFAs", desc: "Fire extinguishers across every building on the airport, organised by location, with test dates and QR tags.", icon: React.createElement(Flame, { size: 22 }), color: "#AF3A22", live: true, onClick: () => onOpen("fafa") }),
+                React.createElement(ModuleCard, { eyebrow: "Watch Room", title: "Watch Log", desc: "A permanent, timestamped record of the day — who logged what, and when. Nothing can be edited or removed once entered.", icon: React.createElement(FileText, { size: 22 }), color: "#2E6E7E", live: true, onClick: () => onOpen("watchlog") }),
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Practical", desc: "Log practical activities and evidence — formal sign-off against versioned criteria comes next.", icon: React.createElement(ClipboardCheck, { size: 22 }), color: AMBER, live: true, onClick: () => onOpen("practical") }),
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Theory", desc: "Self-declared understanding, gated behind reading the material. Concept preview of the full item list available now.", icon: React.createElement(BookOpen, { size: 22 }), color: GREEN, badge: "Preview", onClick: () => onOpen("theory") }),
                 React.createElement(ModuleCard, { eyebrow: "Records", title: "Personal Info", desc: "Payroll number, contact details, and emergency contact for each firefighter.", icon: React.createElement(User, { size: 22 }), color: "#6B5B95", live: true, onClick: () => onOpen("personal") }),
@@ -33372,6 +33375,104 @@ function FafaModule({ onBack, focusAssetId, onFocusHandled }) {
         editTestTypeFor && React.createElement(EditTestTypeModal, { equipment: editTestTypeFor.item, testType: editTestTypeFor.testType, onCancel: () => setEditTestTypeFor(null), onSave: (updates) => updateTestType(editTestTypeFor.item, editTestTypeFor.testType.id, updates) }),
         showManageBuildings && React.createElement(ManageFafaBuildingsModal, { buildings, extinguishers, onCancel: () => setShowManageBuildings(false), onSave: (next) => { persistBuildings(next); setShowManageBuildings(false); } }),
         qrFor && React.createElement(QrModal, { item: qrFor, onClose: () => setQrFor(null) }));
+}
+
+// ---------- Watch Room Log ----------
+const WATCHLOG_KEY = "watchlog:entries";
+function shiftDateStr(dateStr, n) {
+    return addDays(dateStr, n);
+}
+function watchLogDayLabel(dateStr) {
+    const d = new Date(dateStr + "T00:00:00");
+    return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
+function WatchLogEntry({ entry }) {
+    return React.createElement("div", { style: { display: "flex", gap: 14, padding: "12px 0", borderBottom: `1px solid ${LINE}` } },
+        React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 12, color: MUTED, width: 52, flexShrink: 0, paddingTop: 2 } }, entry.time),
+        React.createElement("div", { style: { flex: 1 } },
+            React.createElement("div", { style: { fontSize: 14.5, lineHeight: 1.5, whiteSpace: "pre-wrap" } }, entry.text),
+            React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 4 } }, entry.enteredBy)));
+}
+function WatchLogModule({ onBack }) {
+    const [entries, setEntries] = useState(null);
+    const [ready, setReady] = useState(false);
+    const [error, setError] = useState(null);
+    const [viewDate, setViewDate] = useState(todayISO());
+    const [text, setText] = useState("");
+    const [busy, setBusy] = useState(false);
+    useEffect(() => {
+        (async () => {
+            try {
+                const r = await window.storage.get(WATCHLOG_KEY, true);
+                setEntries(r && r.value ? JSON.parse(r.value) : []);
+            }
+            catch {
+                setEntries([]);
+            }
+            setReady(true);
+        })();
+    }, []);
+    async function addEntry(e) {
+        e.preventDefault();
+        const trimmed = text.trim();
+        if (!trimmed || busy) return;
+        setBusy(true);
+        const entry = {
+            id: uid(),
+            text: trimmed,
+            enteredBy: (currentUser && currentUser.name) || "Unknown",
+            date: todayISO(),
+            time: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+            createdAt: Date.now(),
+        };
+        const next = [...entries, entry];
+        setEntries(next);
+        setText("");
+        try {
+            await window.storage.set(WATCHLOG_KEY, JSON.stringify(next), true);
+        }
+        catch {
+            setError("Entry added, but saving failed — it may not persist. Try again.");
+        }
+        setBusy(false);
+    }
+    const isToday = viewDate === todayISO();
+    const dayEntries = (entries || [])
+        .filter((e) => e.date === viewDate)
+        .sort((a, b) => a.createdAt - b.createdAt);
+    const entryRows = dayEntries.map((e) => React.createElement(WatchLogEntry, { key: e.id, entry: e }));
+    const header = React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6, flexWrap: "wrap", gap: 16 } },
+        React.createElement("div", null,
+            React.createElement("button", { onClick: onBack, style: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: MUTED, fontSize: 13, padding: 0, marginBottom: 10 } },
+                React.createElement(ChevronLeft, { size: 14 }),
+                " Dashboard"),
+            React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 3, color: RED, textTransform: "uppercase", marginBottom: 4 } }, "Watch Room"),
+            React.createElement("h1", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 34, margin: 0, letterSpacing: 0.5 } }, "Watch Log")));
+    const dateNav = React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 22 } },
+        React.createElement("button", { onClick: () => setViewDate((d) => shiftDateStr(d, -1)), style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 6, padding: "8px 10px", display: "flex", alignItems: "center", cursor: "pointer" } },
+            React.createElement(ChevronLeft, { size: 15 })),
+        React.createElement("div", { style: { flex: 1, textAlign: "center", fontWeight: 600, fontSize: 15 } }, watchLogDayLabel(viewDate)),
+        React.createElement("button", { onClick: () => setViewDate((d) => shiftDateStr(d, 1)), disabled: isToday, style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 6, padding: "8px 10px", display: "flex", alignItems: "center", cursor: isToday ? "default" : "pointer", opacity: isToday ? 0.4 : 1 } },
+            React.createElement(ChevronRight, { size: 15 })),
+        !isToday && React.createElement("button", { onClick: () => setViewDate(todayISO()), style: { background: "none", border: "none", color: RED, fontSize: 13, fontWeight: 600, cursor: "pointer" } }, "Today"));
+    const entryList = React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: "6px 18px", marginTop: 16 } },
+        dayEntries.length === 0
+            ? React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "24px 0", textAlign: "center" } }, isToday ? "Nothing logged yet today." : "Nothing was logged this day.")
+            : entryRows);
+    const addForm = isToday && React.createElement("form", { onSubmit: addEntry, style: { marginTop: 16, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 16 } },
+        React.createElement("textarea", { value: text, onChange: (e) => setText(e.target.value), placeholder: "Write what happened…", rows: 3, style: { ...inputStyle, resize: "vertical" } }),
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 } },
+            React.createElement("div", { style: { fontSize: 11.5, color: MUTED } }, "This can't be edited or removed once entered — write it as you want it on record."),
+            React.createElement("button", { type: "submit", disabled: !text.trim() || busy, style: { ...primaryBtn, opacity: text.trim() && !busy ? 1 : 0.5, cursor: text.trim() && !busy ? "pointer" : "not-allowed" } }, "Add entry")));
+    return React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
+        React.createElement(FontImport, null),
+        React.createElement(TopBanner, null),
+        React.createElement("div", { style: { maxWidth: 720, margin: "0 auto", padding: "28px 20px 60px", position: "relative" } },
+            header,
+            error && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, marginTop: 16, fontSize: 13 } }, error),
+            !ready
+                ? React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading watch log…")
+                : React.createElement(React.Fragment, null, dateNav, entryList, addForm)));
 }
 
 function PersonalInfoModule({ onBack }) {
