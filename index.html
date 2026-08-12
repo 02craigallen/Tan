@@ -31252,6 +31252,10 @@ function addDays(iso, n) {
     return localDateStr(d);
 }
 function isDueToday(testType) {
+    // "After Use" checks are logged when someone's actually used the item on an incident,
+    // not on a schedule — they don't belong on a daily list nobody can action in advance.
+    if (/after\s*use/i.test(testType.name))
+        return false;
     if (!testType.lastCompleted)
         // Never tested: only daily-cadence checks belong on today's list. A never-done
         // weekly/monthly/annual check is a backlog item (shows as overdue elsewhere),
