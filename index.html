@@ -30462,7 +30462,20 @@ const BarChart3 = (p) => React.createElement(IconBase, { ...p },
     React.createElement("path", { d: "M13 17V5" }),
     React.createElement("path", { d: "M8 17v-3" }));
 // ---------- helpers ----------
-const todayISO = () => new Date().toISOString().slice(0, 10);
+// Deliberately local-time, not UTC (toISOString()) — a date-only string like "2026-08-12"
+// has no timezone of its own, so every function here must read/write calendar dates using
+// the browser's local calendar consistently. Mixing local parsing with UTC formatting (as an
+// earlier version of this code did) makes "tomorrow" collapse back into "today" for part of
+// the year in any timezone ahead of UTC (e.g. British Summer Time), because advancing one
+// local day only advances the UTC clock by 23 hours — not enough to cross the UTC date
+// boundary — so a daily check could never actually clear itself once marked done.
+function localDateStr(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+}
+const todayISO = () => localDateStr(new Date());
 const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 const fmt = (iso) => iso ? new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 // Natural sort so "Fire 2" comes before "Fire 10" instead of after (plain string sort would put "10" before "2").
@@ -31236,7 +31249,7 @@ function dueInfo(testType) {
 function addDays(iso, n) {
     const d = new Date(iso + "T00:00:00");
     d.setDate(d.getDate() + n);
-    return d.toISOString().slice(0, 10);
+    return localDateStr(d);
 }
 function isDueToday(testType) {
     if (!testType.lastCompleted)
