@@ -30465,6 +30465,33 @@ const BarChart3 = (p) => React.createElement(IconBase, { ...p },
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 const fmt = (iso) => iso ? new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+// Natural sort so "Fire 2" comes before "Fire 10" instead of after (plain string sort would put "10" before "2").
+function naturalCompare(a, b) {
+    const split = (s) => {
+        const parts = [];
+        String(s).replace(/(\d+)|(\D+)/g, (_, digits, text) => {
+            parts.push(digits !== undefined ? Number(digits) : text);
+            return "";
+        });
+        return parts;
+    };
+    const ax = split(a);
+    const bx = split(b);
+    for (let i = 0; i < Math.max(ax.length, bx.length); i++) {
+        const an = ax[i];
+        const bn = bx[i];
+        if (an === undefined) return -1;
+        if (bn === undefined) return 1;
+        if (typeof an === "number" && typeof bn === "number") {
+            if (an !== bn) return an - bn;
+        }
+        else {
+            const as = String(an), bs = String(bn);
+            if (as !== bs) return as < bs ? -1 : 1;
+        }
+    }
+    return 0;
+}
 const LOCATIONS = ["Appliance Bay", "BA Store", "Hose Store", "Store Room", "Watch Room", "Yard"];
 // Fire 1 / Fire 2 / Fire 3 (EQ-0004..0006) — the only appliances with a tyre panel for now.
 const TIRE_MONITORED_ASSET_IDS = new Set(["EQ-0004", "EQ-0005", "EQ-0006"]);
@@ -31563,7 +31590,7 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
             if (statusFilter !== "All" && e.status !== statusFilter)
                 return false;
             return true;
-        });
+        }).sort((a, b) => naturalCompare(a.name, b.name));
     }, [equipment, query, locFilter, catFilter, statusFilter, showActiveOnly]);
     return (React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
         React.createElement(FontImport, null),
