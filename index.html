@@ -31831,7 +31831,38 @@ function Header({ onAdd, onDueToday, dueTodayCount, onBack, selectMode, onToggle
                 React.createElement(Plus, { size: 16 }),
                 " Add equipment"))));
 }
+function DueTodayGroup({ group, onSignoff }) {
+    const { equipment, unit, tasks } = group;
+    const taskRows = tasks.map(({ testType }) => React.createElement("div", { key: testType.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, paddingTop: 8, marginTop: 8, borderTop: `1px solid ${LINE}` } },
+        React.createElement("div", { style: { fontSize: 13.5 } }, testType.name),
+        React.createElement("button", { onClick: () => onSignoff(equipment, testType, unit), style: { background: RED, color: "#fff", border: "none", padding: "6px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" } }, "Sign off")));
+    return React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "12px 14px" } },
+        React.createElement("div", { style: { fontWeight: 600, fontSize: 15 } },
+            equipment.name,
+            unit && React.createElement("span", { style: { color: MUTED, fontWeight: 500 } },
+                " \u00B7 ",
+                unit.label)),
+        React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 2 } },
+            equipment.location,
+            " \u00B7 ",
+            tasks.length,
+            " check",
+            tasks.length !== 1 ? "s" : "",
+            " due"),
+        taskRows);
+}
 function DueTodayModal({ rows, onClose, onSignoff }) {
+    const groups = [];
+    const groupIndex = {};
+    rows.forEach(({ equipment, testType, unit }) => {
+        const key = equipment.id + (unit ? unit.id : "");
+        if (!(key in groupIndex)) {
+            groupIndex[key] = groups.length;
+            groups.push({ equipment, unit, tasks: [] });
+        }
+        groups[groupIndex[key]].tasks.push({ testType });
+    });
+    const groupCards = groups.map((g) => React.createElement(DueTodayGroup, { key: g.equipment.id + (g.unit ? g.unit.id : ""), group: g, onSignoff: onSignoff }));
     return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
         React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" } }),
         React.createElement("div", { style: { position: "relative", background: BG, border: `1px solid ${LINE}`, borderRadius: 10, width: "min(520px, 100%)", padding: 22, maxHeight: "85vh", overflowY: "auto" } },
@@ -31841,27 +31872,7 @@ function DueTodayModal({ rows, onClose, onSignoff }) {
                     React.createElement("h3", { style: { fontFamily: DISPLAY_FONT, fontSize: 22, margin: "2px 0 0", fontWeight: 600 } }, "Tests due today")),
                 React.createElement("button", { onClick: onClose, style: { background: "none", border: "none", color: MUTED } },
                     React.createElement(X, { size: 18 }))),
-            rows.length === 0 ? (React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "Nothing due today. All caught up.")) : (React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, rows.map(({ equipment, testType, unit }) => (React.createElement("div", { key: equipment.id + testType.id + (unit ? unit.id : ""), style: {
-                    background: PANEL,
-                    border: `1px solid ${LINE}`,
-                    borderRadius: 8,
-                    padding: "12px 14px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 12,
-                } },
-                React.createElement("div", null,
-                    React.createElement("div", { style: { fontWeight: 600, fontSize: 14 } },
-                        equipment.name,
-                        unit && React.createElement("span", { style: { color: MUTED, fontWeight: 500 } },
-                            " \u00B7 ",
-                            unit.label)),
-                    React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 2 } },
-                        testType.name,
-                        " \u00B7 ",
-                        equipment.location)),
-                React.createElement("button", { onClick: () => onSignoff(equipment, testType, unit), style: { background: RED, color: "#fff", border: "none", padding: "7px 14px", borderRadius: 6, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" } }, "Sign off")))))))));
+            groups.length === 0 ? (React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "Nothing due today. All caught up.")) : React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, groupCards))));
 }
 function todayLong() {
     return new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
