@@ -31686,7 +31686,6 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
             React.createElement(ModalActions, { onCancel: () => setShowResetConfirm(false) },
                 React.createElement("button", { onClick: resetToStarterData, style: primaryBtn }, "Yes, reset")))),
         showDueToday && (React.createElement(DueTodayModal, { rows: dueToday, onClose: () => setShowDueToday(false), onSignoff: (equipment, testType, unit) => {
-                setShowDueToday(false);
                 setSignoffFor({ equipment, testType, unit });
             } }))));
 }
@@ -31830,7 +31829,7 @@ function Header({ onAdd, onDueToday, dueTodayCount, onBack, selectMode, onToggle
                 " Add equipment"))));
 }
 function DueTodayModal({ rows, onClose, onSignoff }) {
-    return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
+    return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
         React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" } }),
         React.createElement("div", { style: { position: "relative", background: BG, border: `1px solid ${LINE}`, borderRadius: 10, width: "min(520px, 100%)", padding: 22, maxHeight: "85vh", overflowY: "auto" } },
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 } },
@@ -32215,29 +32214,31 @@ function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, o
             item.units ? unitsTestTypesSection : flatTestTypesSection,
             React.createElement("div", { style: { marginTop: 28 } },
                 React.createElement(SectionLabel, { icon: React.createElement(History, { size: 13 }) }, "Sign-off history"),
-                React.createElement("div", { style: { marginTop: 10, display: "flex", flexDirection: "column", gap: 8 } },
-                    log.length === 0 && React.createElement("div", { style: { color: MUTED, fontSize: 13 } }, "No sign-offs logged yet."),
-                    log.map((l) => (React.createElement("div", { key: l.id, style: { borderLeft: `2px solid ${l.status === "unserviceable" ? RED : GREEN}`, paddingLeft: 12, paddingBottom: 4 } },
-                        React.createElement("div", { style: { fontSize: 13, display: "flex", justifyContent: "space-between", gap: 8 } },
-                            React.createElement("span", { style: { fontWeight: 600 } },
-                                l.testTypeName,
-                                l.unitLabel && React.createElement("span", { style: { color: MUTED, fontWeight: 500 } },
-                                    " · ",
-                                    l.unitLabel)),
-                            React.createElement("span", { style: { fontFamily: MONO_FONT, fontSize: 11, color: MUTED } },
-                                fmt(l.date),
-                                " ",
-                                l.time)),
-                        React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 2 } },
-                            l.signedBy,
-                            " · marked ",
-                            React.createElement("span", { style: { color: l.status === "unserviceable" ? RED : GREEN, fontWeight: 600 } }, l.status),
-                            " · ",
-                            l.location),
-                        l.notes && React.createElement("div", { style: { fontSize: 12, color: INK, marginTop: 4, fontStyle: "italic" } },
-                            "\"",
-                            l.notes,
-                            "\"")))))))));
+                React.createElement(SignoffHistoryTable, { log: log })))));
+}
+function SignoffHistoryTable({ log }) {
+    if (log.length === 0) {
+        return React.createElement("div", { style: { color: MUTED, fontSize: 13, marginTop: 10 } }, "No sign-offs logged yet.");
+    }
+    const columns = ["Date", "Test", "Unit", "Signed by", "Status", "Location", "Notes"];
+    const headerRow = React.createElement("tr", null, columns.map((h) => React.createElement("th", { key: h, style: {
+            textAlign: "left", fontSize: 10.5, textTransform: "uppercase", letterSpacing: 1, color: MUTED,
+            padding: "8px 10px", borderBottom: `1px solid ${LINE}`, background: PANEL_RAISED,
+            position: "sticky", top: 0, whiteSpace: "nowrap",
+        } }, h)));
+    const bodyRows = log.map((l) => React.createElement("tr", { key: l.id, style: { borderBottom: `1px solid ${LINE}` } },
+        React.createElement("td", { style: { padding: "8px 10px", fontSize: 12, fontFamily: MONO_FONT, color: MUTED, whiteSpace: "nowrap" } }, `${fmt(l.date)}${l.time ? " " + l.time : ""}`),
+        React.createElement("td", { style: { padding: "8px 10px", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" } }, l.testTypeName),
+        React.createElement("td", { style: { padding: "8px 10px", fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" } }, l.unitLabel || "—"),
+        React.createElement("td", { style: { padding: "8px 10px", fontSize: 12.5, whiteSpace: "nowrap" } }, l.signedBy),
+        React.createElement("td", { style: { padding: "8px 10px", fontSize: 12.5, whiteSpace: "nowrap" } },
+            React.createElement("span", { style: { color: l.status === "unserviceable" ? RED : GREEN, fontWeight: 600, textTransform: "capitalize" } }, l.status)),
+        React.createElement("td", { style: { padding: "8px 10px", fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" } }, l.location || "—"),
+        React.createElement("td", { style: { padding: "8px 10px", fontSize: 12.5, color: INK, fontStyle: l.notes ? "italic" : "normal", minWidth: 140 } }, l.notes || "—")));
+    return React.createElement("div", { style: { marginTop: 10, maxHeight: 320, overflow: "auto", border: `1px solid ${LINE}`, borderRadius: 8 } },
+        React.createElement("table", { style: { width: "100%", minWidth: 640, borderCollapse: "collapse" } },
+            React.createElement("thead", null, headerRow),
+            React.createElement("tbody", null, bodyRows)));
 }
 function TireTile({ tire, onCommit }) {
     const [value, setValue] = useState(tire.psi ?? "");
