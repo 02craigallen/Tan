@@ -30505,6 +30505,7 @@ function naturalCompare(a, b) {
     }
     return 0;
 }
+const FIRE_1_2_3_PRIORITY = { "Fire 1": 0, "Fire 2": 1, "Fire 3": 2 };
 const LOCATIONS = ["Appliance Bay", "BA Store", "Hose Store", "Store Room", "Watch Room", "Yard"];
 // Fire 1 / Fire 2 / Fire 3 (EQ-0004..0006) — the only appliances with a tyre panel for now.
 const TIRE_MONITORED_ASSET_IDS = new Set(["EQ-0004", "EQ-0005", "EQ-0006"]);
@@ -31610,7 +31611,15 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
             if (statusFilter !== "All" && e.status !== statusFilter)
                 return false;
             return true;
-        }).sort((a, b) => naturalCompare(a.name, b.name));
+        }).sort((a, b) => {
+            if (a.category !== b.category)
+                return a.category < b.category ? -1 : 1;
+            const ap = FIRE_1_2_3_PRIORITY[a.name] ?? Infinity;
+            const bp = FIRE_1_2_3_PRIORITY[b.name] ?? Infinity;
+            if (ap !== bp)
+                return ap - bp;
+            return naturalCompare(a.name, b.name);
+        });
     }, [equipment, query, locFilter, catFilter, statusFilter, showActiveOnly]);
     return (React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
         React.createElement(FontImport, null),
