@@ -30384,6 +30384,12 @@ const History = (p) => React.createElement(IconBase, { ...p },
     React.createElement("polyline", { points: "12 8 12 12 15 14" }));
 const Flame = (p) => React.createElement(IconBase, { ...p },
     React.createElement("path", { d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" }));
+const Grid3x3 = (p) => React.createElement(IconBase, { ...p },
+    React.createElement("rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }),
+    React.createElement("path", { d: "M3 9h18" }),
+    React.createElement("path", { d: "M3 15h18" }),
+    React.createElement("path", { d: "M9 3v18" }),
+    React.createElement("path", { d: "M15 3v18" }));
 const Building2 = (p) => React.createElement(IconBase, { ...p },
     React.createElement("path", { d: "M6 22V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v18" }),
     React.createElement("path", { d: "M14 9h4a1 1 0 0 1 1 1v12" }),
@@ -32860,6 +32866,8 @@ function App() {
             } });
     if (view === "watchlog")
         return React.createElement(WatchLogModule, { onBack: () => setView("dashboard") });
+    if (view === "ridersboard")
+        return React.createElement(RidersBoardModule, { onBack: () => setView("dashboard") });
     if (view === "personal")
         return React.createElement(PersonalInfoModule, { onBack: () => setView("dashboard") });
     if (view === "calendar")
@@ -32886,6 +32894,7 @@ function Dashboard({ onOpen }) {
                 React.createElement(ModuleCard, { eyebrow: "Equipment", title: "EMS", desc: "Test schedules, sign-offs, and full accountability history for every piece of station equipment.", icon: React.createElement(Wrench, { size: 22 }), color: RED, live: true, onClick: () => onOpen("ems") }),
                 React.createElement(ModuleCard, { eyebrow: "Equipment", title: "FAFAs", desc: "Fire extinguishers across every building on the airport, organised by location, with test dates and QR tags.", icon: React.createElement(Flame, { size: 22 }), color: "#AF3A22", live: true, onClick: () => onOpen("fafa") }),
                 React.createElement(ModuleCard, { eyebrow: "Watch Room", title: "Watchroom Log", desc: "A permanent, timestamped record of the day — who logged what, and when. Nothing can be edited or removed once entered.", icon: React.createElement(FileText, { size: 22 }), color: "#2E6E7E", live: true, onClick: () => onOpen("watchlog") }),
+                React.createElement(ModuleCard, { eyebrow: "Watch Room", title: "Riders Board", desc: "Who's riding which position — a simple editable grid, saved when you're ready.", icon: React.createElement(Grid3x3, { size: 22 }), color: "#8A6D3B", live: true, onClick: () => onOpen("ridersboard") }),
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Practical", desc: "Log practical activities and evidence — formal sign-off against versioned criteria comes next.", icon: React.createElement(ClipboardCheck, { size: 22 }), color: AMBER, live: true, onClick: () => onOpen("practical") }),
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Theory", desc: "Self-declared understanding, gated behind reading the material. Concept preview of the full item list available now.", icon: React.createElement(BookOpen, { size: 22 }), color: GREEN, badge: "Preview", onClick: () => onOpen("theory") }),
                 React.createElement(ModuleCard, { eyebrow: "Records", title: "Personal Info", desc: "Payroll number, contact details, and emergency contact for each firefighter.", icon: React.createElement(User, { size: 22 }), color: "#6B5B95", live: true, onClick: () => onOpen("personal") }),
@@ -33498,6 +33507,103 @@ function WatchLogModule({ onBack }) {
             !ready
                 ? React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading watch log…")
                 : React.createElement(React.Fragment, null, dateNav, entryList, addForm)));
+}
+
+// ---------- Riders board ----------
+const RIDERS_BOARD_KEY = "ridersboard:grid";
+const RIDERS_BOARD_COLS = 5;
+const RIDERS_BOARD_ROWS = 7;
+function blankRidersBoard() {
+    return {
+        colHeaders: Array(RIDERS_BOARD_COLS).fill(""),
+        rowHeaders: Array(RIDERS_BOARD_ROWS).fill(""),
+        cells: Array.from({ length: RIDERS_BOARD_ROWS }, () => Array(RIDERS_BOARD_COLS).fill("")),
+    };
+}
+function RidersBoardModule({ onBack }) {
+    const [saved, setSaved] = useState(null);
+    const [draft, setDraft] = useState(null);
+    const [ready, setReady] = useState(false);
+    const [error, setError] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const [justSaved, setJustSaved] = useState(false);
+    useEffect(() => {
+        (async () => {
+            try {
+                const r = await window.storage.get(RIDERS_BOARD_KEY, true);
+                const loaded = r && r.value ? JSON.parse(r.value) : null;
+                const board = loaded || blankRidersBoard();
+                setSaved(board);
+                setDraft(board);
+            }
+            catch {
+                const board = blankRidersBoard();
+                setSaved(board);
+                setDraft(board);
+            }
+            setReady(true);
+        })();
+    }, []);
+    const dirty = saved && draft && JSON.stringify(saved) !== JSON.stringify(draft);
+    function setColHeader(i, value) {
+        setDraft((d) => ({ ...d, colHeaders: d.colHeaders.map((h, idx) => (idx === i ? value : h)) }));
+    }
+    function setRowHeader(i, value) {
+        setDraft((d) => ({ ...d, rowHeaders: d.rowHeaders.map((h, idx) => (idx === i ? value : h)) }));
+    }
+    function setCell(r, c, value) {
+        setDraft((d) => ({ ...d, cells: d.cells.map((row, ri) => (ri === r ? row.map((v, ci) => (ci === c ? value : v)) : row)) }));
+    }
+    async function save() {
+        setBusy(true);
+        try {
+            await window.storage.set(RIDERS_BOARD_KEY, JSON.stringify(draft), true);
+            setSaved(draft);
+            setJustSaved(true);
+            setError(null);
+            setTimeout(() => setJustSaved(false), 2500);
+        }
+        catch {
+            setError("Couldn't save — check your connection and try again.");
+        }
+        setBusy(false);
+    }
+    function discard() {
+        setDraft(saved);
+    }
+    const cellStyle = { ...inputStyle, textAlign: "center", padding: "8px 4px", fontSize: 13 };
+    const headerCellStyle = { ...inputStyle, textAlign: "center", padding: "8px 4px", fontSize: 12.5, fontWeight: 600, background: PANEL_RAISED };
+    let grid = null;
+    if (draft) {
+        const colHeaderCells = draft.colHeaders.map((h, i) => React.createElement("input", { key: "ch" + i, value: h, onChange: (e) => setColHeader(i, e.target.value), placeholder: `Position ${i + 1}`, style: headerCellStyle }));
+        const cornerCell = React.createElement("div", { key: "corner" });
+        const headerRow = React.createElement(React.Fragment, null, cornerCell, colHeaderCells);
+        const bodyRows = draft.cells.map((row, r) => {
+            const rowHeaderCell = React.createElement("input", { key: "rh" + r, value: draft.rowHeaders[r], onChange: (e) => setRowHeader(r, e.target.value), placeholder: `Row ${r + 1}`, style: headerCellStyle });
+            const rowCells = row.map((v, c) => React.createElement("input", { key: r + "-" + c, value: v, onChange: (e) => setCell(r, c, e.target.value), style: cellStyle }));
+            return React.createElement(React.Fragment, { key: "row" + r }, rowHeaderCell, rowCells);
+        });
+        grid = React.createElement("div", { style: { display: "grid", gridTemplateColumns: `140px repeat(${RIDERS_BOARD_COLS}, 1fr)`, gap: 6, marginTop: 20 } }, headerRow, bodyRows);
+    }
+    return React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
+        React.createElement(FontImport, null),
+        React.createElement(TopBanner, null),
+        React.createElement("div", { style: { maxWidth: 900, margin: "0 auto", padding: "28px 20px 60px", position: "relative" } },
+            React.createElement("button", { onClick: onBack, style: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: MUTED, fontSize: 13, padding: 0, marginBottom: 10 } },
+                React.createElement(ChevronLeft, { size: 14 }),
+                " Dashboard"),
+            React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 3, color: RED, textTransform: "uppercase", marginBottom: 4 } }, "Watch Room"),
+            React.createElement("h1", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 34, margin: 0, letterSpacing: 0.5 } }, "Riders Board"),
+            React.createElement("p", { style: { color: MUTED, fontSize: 14, marginTop: 10, maxWidth: 560 } }, "Edit any box, then press Save — nothing changes for anyone else until you do."),
+            error && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, marginTop: 16, fontSize: 13 } }, error),
+            !ready
+                ? React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading riders board…")
+                : React.createElement(React.Fragment, null,
+                    React.createElement("div", { style: { overflowX: "auto" } }, grid),
+                    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginTop: 20 } },
+                        React.createElement("button", { onClick: save, disabled: !dirty || busy, style: { ...primaryBtn, opacity: dirty && !busy ? 1 : 0.5, cursor: dirty && !busy ? "pointer" : "not-allowed" } }, busy ? "Saving…" : "Save"),
+                        dirty && React.createElement("button", { onClick: discard, style: { background: "none", border: `1px solid ${LINE}`, color: INK, padding: "9px 16px", borderRadius: 6, fontSize: 14 } }, "Discard changes"),
+                        justSaved && React.createElement("span", { style: { color: GREEN, fontSize: 13, fontWeight: 600 } }, "Saved")))));
 }
 
 function PersonalInfoModule({ onBack }) {

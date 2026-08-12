@@ -8,7 +8,7 @@ const { userFromRequest, unauthorized, forbidden } = require("../lib/auth");
 // dedicated, role-filtered endpoints instead — see people.js / practical-log.js /
 // practical-assessments.js — because a blind whole-document overwrite here would let
 // one person's filtered view accidentally wipe out data they can't see.
-const ALLOWED_KEYS = new Set(["ems:equipment", "ems:signoff-log", "ems:categories", "ems:locations", "fafa:extinguishers", "fafa:signoff-log", "fafa:buildings", "watchlog:entries"]);
+const ALLOWED_KEYS = new Set(["ems:equipment", "ems:signoff-log", "ems:categories", "ems:locations", "fafa:extinguishers", "fafa:signoff-log", "fafa:buildings", "watchlog:entries", "ridersboard:grid"]);
 
 app.http("kv", {
     methods: ["GET", "PUT"],
