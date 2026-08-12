@@ -33408,6 +33408,7 @@ function WatchLogModule({ onBack }) {
     const [text, setText] = useState("");
     const [color, setColor] = useState("black");
     const [busy, setBusy] = useState(false);
+    const [ridersBoard, setRidersBoard] = useState(null);
     useEffect(() => {
         (async () => {
             try {
@@ -33452,8 +33453,10 @@ function WatchLogModule({ onBack }) {
         .sort((a, b) => a.createdAt - b.createdAt);
     const entryRows = dayEntries.map((e) => React.createElement(WatchLogEntry, { key: e.id, entry: e }));
     const printStyles = React.createElement("style", null, `
+      .watchlog-printonly { display: none; }
       @media print {
         .watchlog-noprint { display: none !important; }
+        .watchlog-printonly { display: block !important; }
       }
       .watchlog-layout { display: grid; grid-template-columns: minmax(0, 1fr) 620px; gap: 24px; align-items: start; }
       @media (max-width: 880px) {
@@ -33508,9 +33511,10 @@ function WatchLogModule({ onBack }) {
         React.createElement("div", { style: { maxWidth: 1420, margin: "0 auto", padding: "28px 20px 60px", position: "relative" } },
             header,
             error && React.createElement("div", { className: "watchlog-noprint", style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, marginTop: 16, fontSize: 13 } }, error),
+            React.createElement(RidersBoardPrintTable, { board: ridersBoard }),
             React.createElement("div", { className: "watchlog-layout", style: { marginTop: 16 } },
                 React.createElement("div", null, logColumn),
-                React.createElement("div", { className: "watchlog-noprint" }, React.createElement(RidersBoardPanel, null)))));
+                React.createElement("div", { className: "watchlog-noprint" }, React.createElement(RidersBoardPanel, { onSavedChange: setRidersBoard })))));
 }
 
 // ---------- Riders board ----------
@@ -33524,7 +33528,23 @@ function blankRidersBoard() {
         cells: Array.from({ length: RIDERS_BOARD_ROWS }, () => Array(RIDERS_BOARD_COLS).fill("")),
     };
 }
-function RidersBoardPanel() {
+function RidersBoardPrintTable({ board }) {
+    if (!board) return null;
+    const cellStyle = { border: `1px solid ${LINE}`, padding: "6px 8px", fontSize: 12.5, textAlign: "left" };
+    const headCellStyle = { ...cellStyle, background: PANEL_RAISED, fontWeight: 600 };
+    const headerRow = React.createElement("tr", null,
+        React.createElement("th", { style: headCellStyle }, ""),
+        board.colHeaders.map((h, i) => React.createElement("th", { key: "ch" + i, style: headCellStyle }, h || `Position ${i + 1}`)));
+    const bodyRows = board.cells.map((row, r) => React.createElement("tr", { key: "row" + r },
+        React.createElement("th", { style: headCellStyle }, board.rowHeaders[r] || `Row ${r + 1}`),
+        row.map((v, c) => React.createElement("td", { key: c, style: cellStyle }, v))));
+    return React.createElement("div", { className: "watchlog-printonly", style: { marginBottom: 24 } },
+        React.createElement("h2", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 18, margin: "0 0 10px" } }, "Riders Board"),
+        React.createElement("table", { style: { width: "100%", borderCollapse: "collapse" } },
+            React.createElement("thead", null, headerRow),
+            React.createElement("tbody", null, bodyRows)));
+}
+function RidersBoardPanel({ onSavedChange }) {
     const [saved, setSaved] = useState(null);
     const [draft, setDraft] = useState(null);
     const [ready, setReady] = useState(false);
@@ -33539,11 +33559,13 @@ function RidersBoardPanel() {
                 const board = loaded || blankRidersBoard();
                 setSaved(board);
                 setDraft(board);
+                if (onSavedChange) onSavedChange(board);
             }
             catch {
                 const board = blankRidersBoard();
                 setSaved(board);
                 setDraft(board);
+                if (onSavedChange) onSavedChange(board);
             }
             setReady(true);
         })();
@@ -33563,6 +33585,7 @@ function RidersBoardPanel() {
         try {
             await window.storage.set(RIDERS_BOARD_KEY, JSON.stringify(draft), true);
             setSaved(draft);
+            if (onSavedChange) onSavedChange(draft);
             setJustSaved(true);
             setError(null);
             setTimeout(() => setJustSaved(false), 2500);
