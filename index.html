@@ -33441,35 +33441,44 @@ function WatchLogModule({ onBack }) {
         .filter((e) => e.date === viewDate)
         .sort((a, b) => a.createdAt - b.createdAt);
     const entryRows = dayEntries.map((e) => React.createElement(WatchLogEntry, { key: e.id, entry: e }));
+    const printStyles = React.createElement("style", null, `
+      @media print {
+        .watchlog-noprint { display: none !important; }
+      }
+    `);
     const header = React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6, flexWrap: "wrap", gap: 16 } },
         React.createElement("div", null,
-            React.createElement("button", { onClick: onBack, style: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: MUTED, fontSize: 13, padding: 0, marginBottom: 10 } },
+            React.createElement("button", { className: "watchlog-noprint", onClick: onBack, style: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: MUTED, fontSize: 13, padding: 0, marginBottom: 10 } },
                 React.createElement(ChevronLeft, { size: 14 }),
                 " Dashboard"),
             React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 3, color: RED, textTransform: "uppercase", marginBottom: 4 } }, "Watch Room"),
-            React.createElement("h1", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 34, margin: 0, letterSpacing: 0.5 } }, "Watch Log")));
+            React.createElement("h1", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 34, margin: 0, letterSpacing: 0.5 } }, "Watch Log")),
+        React.createElement("button", { className: "watchlog-noprint", onClick: () => window.print(), style: { display: "flex", alignItems: "center", gap: 8, background: PANEL, color: INK, border: `1px solid ${LINE}`, padding: "10px 16px", borderRadius: 6, fontWeight: 600, fontSize: 14 } },
+            React.createElement(Printer, { size: 15 }),
+            " Download as PDF"));
     const dateNav = React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 22 } },
-        React.createElement("button", { onClick: () => setViewDate((d) => shiftDateStr(d, -1)), style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 6, padding: "8px 10px", display: "flex", alignItems: "center", cursor: "pointer" } },
+        React.createElement("button", { className: "watchlog-noprint", onClick: () => setViewDate((d) => shiftDateStr(d, -1)), style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 6, padding: "8px 10px", display: "flex", alignItems: "center", cursor: "pointer" } },
             React.createElement(ChevronLeft, { size: 15 })),
         React.createElement("div", { style: { flex: 1, textAlign: "center", fontWeight: 600, fontSize: 15 } }, watchLogDayLabel(viewDate)),
-        React.createElement("button", { onClick: () => setViewDate((d) => shiftDateStr(d, 1)), disabled: isToday, style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 6, padding: "8px 10px", display: "flex", alignItems: "center", cursor: isToday ? "default" : "pointer", opacity: isToday ? 0.4 : 1 } },
+        React.createElement("button", { className: "watchlog-noprint", onClick: () => setViewDate((d) => shiftDateStr(d, 1)), disabled: isToday, style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 6, padding: "8px 10px", display: "flex", alignItems: "center", cursor: isToday ? "default" : "pointer", opacity: isToday ? 0.4 : 1 } },
             React.createElement(ChevronRight, { size: 15 })),
-        !isToday && React.createElement("button", { onClick: () => setViewDate(todayISO()), style: { background: "none", border: "none", color: RED, fontSize: 13, fontWeight: 600, cursor: "pointer" } }, "Today"));
+        !isToday && React.createElement("button", { className: "watchlog-noprint", onClick: () => setViewDate(todayISO()), style: { background: "none", border: "none", color: RED, fontSize: 13, fontWeight: 600, cursor: "pointer" } }, "Today"));
     const entryList = React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: "6px 18px", marginTop: 16 } },
         dayEntries.length === 0
             ? React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "24px 0", textAlign: "center" } }, isToday ? "Nothing logged yet today." : "Nothing was logged this day.")
             : entryRows);
-    const addForm = isToday && React.createElement("form", { onSubmit: addEntry, style: { marginTop: 16, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 16 } },
+    const addForm = isToday && React.createElement("form", { className: "watchlog-noprint", onSubmit: addEntry, style: { marginTop: 16, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 16 } },
         React.createElement("textarea", { value: text, onChange: (e) => setText(e.target.value), placeholder: "Write what happened…", rows: 3, style: { ...inputStyle, resize: "vertical" } }),
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 } },
             React.createElement("div", { style: { fontSize: 11.5, color: MUTED } }, "This can't be edited or removed once entered — write it as you want it on record."),
             React.createElement("button", { type: "submit", disabled: !text.trim() || busy, style: { ...primaryBtn, opacity: text.trim() && !busy ? 1 : 0.5, cursor: text.trim() && !busy ? "pointer" : "not-allowed" } }, "Add entry")));
     return React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
         React.createElement(FontImport, null),
-        React.createElement(TopBanner, null),
+        printStyles,
+        React.createElement("div", { className: "watchlog-noprint" }, React.createElement(TopBanner, null)),
         React.createElement("div", { style: { maxWidth: 720, margin: "0 auto", padding: "28px 20px 60px", position: "relative" } },
             header,
-            error && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, marginTop: 16, fontSize: 13 } }, error),
+            error && React.createElement("div", { className: "watchlog-noprint", style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, marginTop: 16, fontSize: 13 } }, error),
             !ready
                 ? React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading watch log…")
                 : React.createElement(React.Fragment, null, dateNav, entryList, addForm)));
