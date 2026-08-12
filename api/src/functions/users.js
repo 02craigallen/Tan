@@ -20,7 +20,7 @@ app.http("users-list", {
 
         if (request.method === "GET") {
             const { resources } = await container("users").items.query("SELECT * FROM c").fetchAll();
-            return { jsonBody: { users: resources.map(publicUser) } };
+            return { headers: { "Cache-Control": "no-store" }, jsonBody: { users: resources.map(publicUser) } };
         }
         // POST — create a login
         let body;

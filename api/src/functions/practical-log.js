@@ -28,14 +28,15 @@ app.http("practical-log-list", {
         if (!user) return unauthorized();
         const all = await loadAll();
         if (request.method === "GET") {
-            if (user.role === "admin") return { jsonBody: { entries: all } };
+            const noStore = { "Cache-Control": "no-store" };
+            if (user.role === "admin") return { headers: noStore, jsonBody: { entries: all } };
             if (user.role === "management") {
                 const doc = await readDoc("kv", PEOPLE_KEY);
                 const people = doc && Array.isArray(doc.value) ? doc.value : [];
                 const watchIds = new Set(people.filter((p) => p.watch === user.watch).map((p) => p.id));
-                return { jsonBody: { entries: all.filter((e) => watchIds.has(e.personId)) } };
+                return { headers: noStore, jsonBody: { entries: all.filter((e) => watchIds.has(e.personId)) } };
             }
-            return { jsonBody: { entries: all.filter((e) => e.personId === user.personId) } };
+            return { headers: noStore, jsonBody: { entries: all.filter((e) => e.personId === user.personId) } };
         }
         // POST — any signed-in user can log an activity about anyone (matches how assessing works)
         let body;

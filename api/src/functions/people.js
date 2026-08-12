@@ -28,7 +28,7 @@ app.http("people-list", {
         if (!user) return unauthorized();
         const all = await loadAll();
         if (request.method === "GET") {
-            return { jsonBody: { people: all.filter((p) => visibleTo(user, p)) } };
+            return { headers: { "Cache-Control": "no-store" }, jsonBody: { people: all.filter((p) => visibleTo(user, p)) } };
         }
         // POST — create. Firefighters cannot add people.
         if (user.role === "firefighter") return forbidden("Only management or admin can add staff.");

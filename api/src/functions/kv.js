@@ -23,7 +23,7 @@ app.http("kv", {
         }
         if (request.method === "GET") {
             const doc = await readDoc("kv", key);
-            return { jsonBody: { value: doc ? doc.value : null } };
+            return { headers: { "Cache-Control": "no-store" }, jsonBody: { value: doc ? doc.value : null } };
         }
         // PUT
         let body;
@@ -34,6 +34,6 @@ app.http("kv", {
             return { status: 400, jsonBody: { error: "Missing body." } };
         }
         await upsertDoc("kv", { id: key, value: body.value, updatedAt: new Date().toISOString(), updatedBy: user.email });
-        return { jsonBody: { ok: true } };
+        return { headers: { "Cache-Control": "no-store" }, jsonBody: { ok: true } };
     },
 });

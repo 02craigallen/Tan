@@ -29,13 +29,14 @@ app.http("practical-assessments-list", {
         if (!user) return unauthorized();
         const all = await loadAll();
         if (request.method === "GET") {
-            if (user.role === "admin") return { jsonBody: { assessments: all } };
+            const noStore = { "Cache-Control": "no-store" };
+            if (user.role === "admin") return { headers: noStore, jsonBody: { assessments: all } };
             const watches = user.role === "management" ? await watchByPersonId() : null;
             const visible = (p) => user.role === "management" ? watches[p.personId] === user.watch : p.personId === user.personId;
             const filtered = all
                 .map((record) => ({ ...record, people: record.people.filter(visible) }))
                 .filter((record) => record.people.length > 0);
-            return { jsonBody: { assessments: filtered } };
+            return { headers: noStore, jsonBody: { assessments: filtered } };
         }
         // POST — any signed-in user can log an assessment (matches how assessing works)
         let body;
