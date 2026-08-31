@@ -31299,6 +31299,8 @@ function unitTestTypes(item) {
     return rows;
 }
 function soonestDue(item) {
+    if (item.withdrawn)
+        return "ok";
     const infos = item.units ? unitTestTypes(item).map(dueInfo) : item.testTypes.map(dueInfo);
     if (infos.some((i) => i.state === "overdue"))
         return "overdue";
@@ -31568,6 +31570,8 @@ function EMSModule({ onBack, focusAssetId, focusUnitCode, onFocusHandled }) {
             return [];
         const rows = [];
         equipment.forEach((eq) => {
+            if (eq.withdrawn)
+                return;
             if (eq.units) {
                 unitTestTypes(eq).forEach((row) => {
                     if (isDueToday(row))
@@ -31588,6 +31592,8 @@ function EMSModule({ onBack, focusAssetId, focusUnitCode, onFocusHandled }) {
             return [];
         const rows = [];
         equipment.forEach((eq) => {
+            if (eq.withdrawn)
+                return;
             if (eq.units) {
                 unitTestTypes(eq).forEach((row) => {
                     if (dueInfo(row).state === "overdue")
@@ -31605,6 +31611,11 @@ function EMSModule({ onBack, focusAssetId, focusUnitCode, onFocusHandled }) {
     }, [equipment]);
     function toggleWithdrawn(eq) {
         const next = equipment.map((e) => (e.id === eq.id ? { ...e, withdrawn: !e.withdrawn } : e));
+        persistEquipment(next);
+        setSelected((s) => (s ? next.find((e) => e.id === s.id) : s));
+    }
+    function toggleUnitWithdrawn(eq, unit) {
+        const next = equipment.map((e) => e.id === eq.id ? { ...e, units: e.units.map((u) => (u.id === unit.id ? { ...u, withdrawn: !u.withdrawn } : u)) } : e);
         persistEquipment(next);
         setSelected((s) => (s ? next.find((e) => e.id === s.id) : s));
     }
@@ -31730,7 +31741,7 @@ function EMSModule({ onBack, focusAssetId, focusUnitCode, onFocusHandled }) {
         selected && (React.createElement(DetailDrawer, { item: selected, log: selectedLog, logLoading: selectedLogLoading, focusUnitCode: pendingUnitCode, onClose: () => {
                 setSelected(null);
                 setPendingUnitCode(null);
-            }, onSignoff: (testType, unit) => setSignoffFor({ equipment: selected, testType, unit }), onReactivate: () => reactivate(selected), onViewQr: (target) => setQrFor(target || selected), onToggleWithdrawn: () => toggleWithdrawn(selected), onPhotoChange: (photo) => updatePhoto(selected, photo), onRemoveTestType: (testType) => removeTestType(selected, testType), onEditTestType: (testType) => setEditTestTypeFor({ equipment: selected, testType }), onAddTestType: () => setAddTestTypeFor(selected), onEditUnit: (unit) => setEditUnitFor({ equipment: selected, unit }), onUpdateTires: (tires) => updateTires(selected, tires) })),
+            }, onSignoff: (testType, unit) => setSignoffFor({ equipment: selected, testType, unit }), onReactivate: () => reactivate(selected), onViewQr: (target) => setQrFor(target || selected), onToggleWithdrawn: () => toggleWithdrawn(selected), onToggleUnitWithdrawn: (unit) => toggleUnitWithdrawn(selected, unit), onPhotoChange: (photo) => updatePhoto(selected, photo), onRemoveTestType: (testType) => removeTestType(selected, testType), onEditTestType: (testType) => setEditTestTypeFor({ equipment: selected, testType }), onAddTestType: () => setAddTestTypeFor(selected), onEditUnit: (unit) => setEditUnitFor({ equipment: selected, unit }), onUpdateTires: (tires) => updateTires(selected, tires) })),
         addTestTypeFor && (React.createElement(AddTestTypeModal, { equipment: addTestTypeFor, onCancel: () => setAddTestTypeFor(null), onSave: (values) => addTestType(addTestTypeFor, values) })),
         editTestTypeFor && (React.createElement(EditTestTypeModal, { equipment: editTestTypeFor.equipment, testType: editTestTypeFor.testType, onCancel: () => setEditTestTypeFor(null), onSave: (updates) => {
                 updateTestType(editTestTypeFor.equipment, editTestTypeFor.testType.id, updates);
@@ -32209,7 +32220,7 @@ function TagCard({ item, categories, onClick, onEdit, selectMode, selected, onTo
             React.createElement(ChevronRight, { size: 16, color: MUTED }))));
 }
 // ---------- detail drawer ----------
-function DetailDrawer({ item, log, logLoading, focusUnitCode, onClose, onSignoff, onReactivate, onViewQr, onToggleWithdrawn, onPhotoChange, onRemoveTestType, onEditTestType, onAddTestType, onEditUnit, onUpdateTires }) {
+function DetailDrawer({ item, log, logLoading, focusUnitCode, onClose, onSignoff, onReactivate, onViewQr, onToggleWithdrawn, onToggleUnitWithdrawn, onPhotoChange, onRemoveTestType, onEditTestType, onAddTestType, onEditUnit, onUpdateTires }) {
     const isAdmin = currentUser && currentUser.role === "admin";
     const [photoBusy, setPhotoBusy] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
@@ -32252,7 +32263,7 @@ function DetailDrawer({ item, log, logLoading, focusUnitCode, onClose, onSignoff
             React.createElement(SectionLabel, null, "Test types (applies to every unit)"),
             React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, marginTop: 10 } }, unitTestTypeRows),
             addTestTypeBtn),
-        React.createElement(UnitsSection, { item: item, onSignoff: onSignoff, onViewUnitQr: onViewQr, onEditUnit: onEditUnit, initialUnitCode: focusUnitCode }));
+        React.createElement(UnitsSection, { item: item, onSignoff: onSignoff, onViewUnitQr: onViewQr, onEditUnit: onEditUnit, onToggleUnitWithdrawn: onToggleUnitWithdrawn, initialUnitCode: focusUnitCode }));
     const flatTestTypeRows = item.testTypes && item.testTypes.map((t) => {
         const info = dueInfo(t);
         const color = info.state === "overdue" ? RED : info.state === "soon" ? AMBER : MUTED;
@@ -32475,7 +32486,7 @@ function unitCodeFor(item, unit) {
     const idx = item.units.findIndex((u) => u.id === unit.id);
     return `${item.assetId}-${String(idx + 1).padStart(2, "0")}`;
 }
-function UnitsSection({ item, onSignoff, onViewUnitQr, onEditUnit, initialUnitCode }) {
+function UnitsSection({ item, onSignoff, onViewUnitQr, onEditUnit, onToggleUnitWithdrawn, initialUnitCode }) {
     const [expandedId, setExpandedId] = useState(() => {
         if (!initialUnitCode) return null;
         const match = item.units.find((u) => unitCodeFor(item, u) === initialUnitCode);
@@ -32514,7 +32525,9 @@ function UnitsSection({ item, onSignoff, onViewUnitQr, onEditUnit, initialUnitCo
                         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, minWidth: 0 } },
                             React.createElement("span", { style: { width: 8, height: 8, borderRadius: "50%", background: dotColor, display: "inline-block", flexShrink: 0 } }),
                             React.createElement("div", null,
-                                React.createElement("div", { style: { fontWeight: 600, fontSize: 13.5 } }, u.label),
+                                React.createElement("div", { style: { fontWeight: 600, fontSize: 13.5 } },
+                                    u.label,
+                                    u.withdrawn && React.createElement("span", { style: { color: MUTED, fontWeight: 600, fontSize: 11, marginLeft: 8, textTransform: "uppercase", letterSpacing: 0.5 } }, "Withdrawn")),
                                 u.otherNo && React.createElement("div", { style: { fontSize: 11.5, color: MUTED, fontFamily: MONO_FONT } }, u.otherNo))),
                         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, flexShrink: 0 } },
                             React.createElement("div", { style: {
@@ -32555,7 +32568,18 @@ function UnitsSection({ item, onSignoff, onViewUnitQr, onEditUnit, initialUnitCo
                                     fontSize: 12,
                                 } },
                                 React.createElement(Pencil, { size: 12 }),
-                                " Edit")),
+                                " Edit"),
+                            React.createElement("button", { onClick: () => onToggleUnitWithdrawn(u), style: {
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    background: "none",
+                                    border: `1px solid ${LINE}`,
+                                    color: u.withdrawn ? GREEN : RED,
+                                    padding: "5px 10px",
+                                    borderRadius: 20,
+                                    fontSize: 12,
+                                } }, u.withdrawn ? "Restore this unit" : "Withdraw this unit")),
                         rows.map(({ testType, info }) => {
                             const color = info.state === "overdue" ? RED : info.state === "soon" ? AMBER : MUTED;
                             return (React.createElement("div", { key: testType.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 } },
