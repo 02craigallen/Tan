@@ -22,12 +22,16 @@ app.http("ems-log-for-equipment", {
         if (!user) return unauthorized();
         await ensureLogContainer();
         const equipmentId = decodeURIComponent(request.params.equipmentId);
+        // Sorted client-side rather than via an ORDER BY on two properties — Cosmos needs an
+        // explicit composite index for multi-property ORDER BY, which this container doesn't
+        // define, and per-item entry counts are small enough that this is cheap either way.
         const { resources } = await container(CONTAINER).items
             .query({
-                query: "SELECT * FROM c WHERE c.equipmentId = @id ORDER BY c.date DESC, c.time DESC",
+                query: "SELECT * FROM c WHERE c.equipmentId = @id",
                 parameters: [{ name: "@id", value: equipmentId }],
             }, { partitionKey: equipmentId })
             .fetchAll();
+        resources.sort((a, b) => `${b.date}T${b.time || ""}`.localeCompare(`${a.date}T${a.time || ""}`));
         return { headers: { "Cache-Control": "no-store" }, jsonBody: { entries: resources } };
     },
 });
