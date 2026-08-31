@@ -32469,7 +32469,7 @@ function UnitsSection({ item, onSignoff, onViewUnitQr, onEditUnit, initialUnitCo
             units.map((u) => {
                 const rows = item.testTypes.map((tt) => ({
                     testType: tt,
-                    info: dueInfo({ intervalDays: tt.intervalDays, lastCompleted: (u.testStatus || {})[tt.id] || null }),
+                    info: dueInfo({ name: tt.name, intervalDays: tt.intervalDays, lastCompleted: (u.testStatus || {})[tt.id] || null }),
                 }));
                 const worst = rows.some((r) => r.info.state === "overdue") ? "overdue" : rows.some((r) => r.info.state === "soon") ? "soon" : "ok";
                 const dotColor = u.withdrawn ? MUTED : u.status === "unserviceable" ? RED : worst === "overdue" ? RED : worst === "soon" ? AMBER : GREEN;
