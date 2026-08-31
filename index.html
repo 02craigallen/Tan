@@ -30348,6 +30348,9 @@ const usersApi = {
     update: (email, updates) => apiFetch(`/users/${encodeURIComponent(email)}`, { method: "PUT", body: JSON.stringify(updates) }).then((d) => d.user),
     remove: (email) => apiFetch(`/users/${encodeURIComponent(email)}`, { method: "DELETE" }),
 };
+const exportApi = {
+    all: () => apiFetch("/export"),
+};
 
 </script>
 <script>
@@ -30423,6 +30426,10 @@ const ScanLine = (p) => React.createElement(IconBase, { ...p },
     React.createElement("path", { d: "M21 17v2a2 2 0 0 1-2 2h-2" }),
     React.createElement("path", { d: "M7 21H5a2 2 0 0 1-2-2v-2" }),
     React.createElement("line", { x1: "3", y1: "12", x2: "21", y2: "12" }));
+const Download = (p) => React.createElement(IconBase, { ...p },
+    React.createElement("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }),
+    React.createElement("polyline", { points: "7 10 12 15 17 10" }),
+    React.createElement("line", { x1: "12", y1: "15", x2: "12", y2: "3" }));
 const Printer = (p) => React.createElement(IconBase, { ...p },
     React.createElement("polyline", { points: "6 9 6 2 18 2 18 9" }),
     React.createElement("path", { d: "M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" }),
@@ -35145,6 +35152,28 @@ function UsersModule({ onBack }) {
     const [people, setPeople] = useState([]);
     const [ready, setReady] = useState(false);
     const [loadError, setLoadError] = useState(null);
+    const [exportBusy, setExportBusy] = useState(false);
+    const [exportError, setExportError] = useState(null);
+    async function handleExport() {
+        setExportBusy(true);
+        setExportError(null);
+        try {
+            const data = await exportApi.all();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `tan-data-export-${todayISO()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        catch (err) {
+            setExportError(err.message || "Export failed — try again.");
+        }
+        setExportBusy(false);
+    }
     useEffect(() => {
         (async () => {
             try {
@@ -35182,6 +35211,15 @@ function UsersModule({ onBack }) {
             React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 3, color: "#6B5B95", textTransform: "uppercase", marginBottom: 4 } }, "Admin"),
             React.createElement("h1", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 34, margin: 0 } }, "Manage Users"),
             React.createElement("p", { style: { color: MUTED, fontSize: 14, marginTop: 8, maxWidth: 600 } }, "Create a login for each member of staff. Firefighters see only their own records, management sees their watch, admin sees everyone."),
+            React.createElement("div", { style: { marginTop: 26, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 18 } },
+                React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" } },
+                    React.createElement("div", null,
+                        React.createElement("div", { style: { fontWeight: 600, fontSize: 15 } }, "Data backup"),
+                        React.createElement("div", { style: { color: MUTED, fontSize: 13, marginTop: 3, maxWidth: 480 } }, "Downloads everything Tan holds — equipment, full sign-off history, staff records, practical logs, watch log, FAFAs — as one file you keep yourself.")),
+                    React.createElement("button", { onClick: handleExport, disabled: exportBusy, style: { display: "flex", alignItems: "center", gap: 8, background: RED, color: "#fff", border: "none", padding: "10px 18px", borderRadius: 6, fontWeight: 600, fontSize: 14, opacity: exportBusy ? 0.6 : 1, cursor: exportBusy ? "default" : "pointer", whiteSpace: "nowrap" } },
+                        React.createElement(Download, { size: 16 }),
+                        exportBusy ? "Exporting…" : "Export everything")),
+                exportError && React.createElement("div", { style: { color: RED, fontSize: 13, marginTop: 10 } }, exportError)),
             loadError && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, margin: "16px 0", fontSize: 13 } }, loadError),
             !ready
                 ? React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading…")
