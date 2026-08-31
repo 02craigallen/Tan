@@ -30337,6 +30337,11 @@ const practicalAssessmentsApi = {
     create: (record) => apiFetch("/practical-assessments", { method: "POST", body: JSON.stringify(record) }).then((d) => d.assessment),
     remove: (id) => apiFetch(`/practical-assessments/${encodeURIComponent(id)}`, { method: "DELETE" }),
 };
+const emsLogApi = {
+    listForEquipment: (equipmentId) => apiFetch(`/ems-log/${encodeURIComponent(equipmentId)}`).then((d) => d.entries),
+    create: (entry) => apiFetch("/ems-log", { method: "POST", body: JSON.stringify(entry) }).then((d) => d.entry),
+    bulkImport: (entries) => apiFetch("/ems-log/bulk", { method: "POST", body: JSON.stringify({ entries }) }),
+};
 const usersApi = {
     list: () => apiFetch("/users").then((d) => d.users),
     create: (user) => apiFetch("/users", { method: "POST", body: JSON.stringify(user) }).then((d) => d.user),
@@ -31300,12 +31305,10 @@ function soonestDue(item) {
 }
 // ---------- storage ----------
 const EQUIP_KEY = "ems:equipment";
-const LOG_KEY = "ems:signoff-log";
 const CATEGORIES_KEY = "ems:categories";
 const LOCATIONS_KEY = "ems:locations";
 function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
     const [equipment, setEquipment] = useState(null);
-    const [log, setLog] = useState(null);
     const [ready, setReady] = useState(false);
     const [error, setError] = useState(null);
     const [query, setQuery] = useState("");
@@ -31363,14 +31366,6 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
                     eq = eq.map((e) => TIRE_MONITORED_ASSET_IDS.has(e.assetId) && !e.tires ? { ...e, tires: defaultTires() } : e);
                     await window.storage.set(EQUIP_KEY, JSON.stringify(eq), true);
                 }
-                let lg;
-                try {
-                    const r = await window.storage.get(LOG_KEY, true);
-                    lg = r ? JSON.parse(r.value) : [];
-                }
-                catch {
-                    lg = [];
-                }
                 let cats;
                 try {
                     const r = await window.storage.get(CATEGORIES_KEY, true);
@@ -31411,7 +31406,6 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
                     }
                 }
                 setEquipment(eq);
-                setLog(lg);
                 setCategories(cats);
                 setLocations(locs);
                 setReady(true);
@@ -31419,13 +31413,37 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
             catch (e) {
                 setError("Couldn't load equipment data. You can still browse, but changes may not save.");
                 setEquipment(seedEquipment());
-                setLog([]);
                 setCategories(CATEGORIES);
                 setLocations(LOCATIONS);
                 setReady(true);
             }
         })();
     }, []);
+    // Sign-off history is fetched per item on demand (it's stored one entry per document,
+    // not a whole-log blob) rather than eagerly loading every item's history up front.
+    const [selectedLog, setSelectedLog] = useState([]);
+    const [selectedLogLoading, setSelectedLogLoading] = useState(false);
+    useEffect(() => {
+        if (!selected) {
+            setSelectedLog([]);
+            return;
+        }
+        let cancelled = false;
+        setSelectedLogLoading(true);
+        emsLogApi.listForEquipment(selected.id)
+            .then((entries) => {
+                if (!cancelled) setSelectedLog(entries);
+            })
+            .catch(() => {
+                if (!cancelled) setSelectedLog([]);
+            })
+            .finally(() => {
+                if (!cancelled) setSelectedLogLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [selected && selected.id]);
     useEffect(() => {
         if (!ready || !focusAssetId || !equipment)
             return;
@@ -31462,15 +31480,6 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
             setError("Change made, but saving failed — it may not persist.");
         }
     }
-    async function persistLog(next) {
-        setLog(next);
-        try {
-            await window.storage.set(LOG_KEY, JSON.stringify(next), true);
-        }
-        catch {
-            setError("Change made, but saving failed — it may not persist.");
-        }
-    }
     function addEquipment(item) {
         persistEquipment([...equipment, item]);
         setShowAdd(false);
@@ -31492,7 +31501,9 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
             location,
             notes,
         };
-        persistLog([entry, ...log]);
+        if (selected && selected.id === eq.id)
+            setSelectedLog((l) => [entry, ...l]);
+        emsLogApi.create(entry).catch(() => setError("Sign-off saved to the equipment, but its history entry failed to save — it may not appear in the log."));
         const next = equipment.map((e) => {
             if (e.id !== eq.id)
                 return e;
@@ -31524,7 +31535,6 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
     async function resetToStarterData() {
         const fresh = seedEquipment();
         await persistEquipment(fresh);
-        await persistLog([]);
         setSelected(null);
         setShowResetConfirm(false);
     }
@@ -31713,7 +31723,7 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
                             });
                         } }))),
                     filtered.length === 0 && (React.createElement("div", { style: { gridColumn: "1/-1", padding: 40, textAlign: "center", color: MUTED, border: `1px dashed ${LINE}`, borderRadius: 10 } }, "Nothing matches. Adjust the filters, or add a new item to the register.")))))),
-        selected && (React.createElement(DetailDrawer, { item: selected, log: log.filter((l) => l.equipmentId === selected.id), onClose: () => setSelected(null), onSignoff: (testType, unit) => setSignoffFor({ equipment: selected, testType, unit }), onReactivate: () => reactivate(selected), onViewQr: (target) => setQrFor(target || selected), onToggleWithdrawn: () => toggleWithdrawn(selected), onPhotoChange: (photo) => updatePhoto(selected, photo), onRemoveTestType: (testType) => removeTestType(selected, testType), onEditTestType: (testType) => setEditTestTypeFor({ equipment: selected, testType }), onAddTestType: () => setAddTestTypeFor(selected), onEditUnit: (unit) => setEditUnitFor({ equipment: selected, unit }), onUpdateTires: (tires) => updateTires(selected, tires) })),
+        selected && (React.createElement(DetailDrawer, { item: selected, log: selectedLog, logLoading: selectedLogLoading, onClose: () => setSelected(null), onSignoff: (testType, unit) => setSignoffFor({ equipment: selected, testType, unit }), onReactivate: () => reactivate(selected), onViewQr: (target) => setQrFor(target || selected), onToggleWithdrawn: () => toggleWithdrawn(selected), onPhotoChange: (photo) => updatePhoto(selected, photo), onRemoveTestType: (testType) => removeTestType(selected, testType), onEditTestType: (testType) => setEditTestTypeFor({ equipment: selected, testType }), onAddTestType: () => setAddTestTypeFor(selected), onEditUnit: (unit) => setEditUnitFor({ equipment: selected, unit }), onUpdateTires: (tires) => updateTires(selected, tires) })),
         addTestTypeFor && (React.createElement(AddTestTypeModal, { equipment: addTestTypeFor, onCancel: () => setAddTestTypeFor(null), onSave: (values) => addTestType(addTestTypeFor, values) })),
         editTestTypeFor && (React.createElement(EditTestTypeModal, { equipment: editTestTypeFor.equipment, testType: editTestTypeFor.testType, onCancel: () => setEditTestTypeFor(null), onSave: (updates) => {
                 updateTestType(editTestTypeFor.equipment, editTestTypeFor.testType.id, updates);
@@ -32187,7 +32197,7 @@ function TagCard({ item, categories, onClick, onEdit, selectMode, selected, onTo
             React.createElement(ChevronRight, { size: 16, color: MUTED }))));
 }
 // ---------- detail drawer ----------
-function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, onToggleWithdrawn, onPhotoChange, onRemoveTestType, onEditTestType, onAddTestType, onEditUnit, onUpdateTires }) {
+function DetailDrawer({ item, log, logLoading, onClose, onSignoff, onReactivate, onViewQr, onToggleWithdrawn, onPhotoChange, onRemoveTestType, onEditTestType, onAddTestType, onEditUnit, onUpdateTires }) {
     const isAdmin = currentUser && currentUser.role === "admin";
     const [photoBusy, setPhotoBusy] = useState(false);
     async function handlePhotoUpload(e) {
@@ -32362,9 +32372,12 @@ function DetailDrawer({ item, log, onClose, onSignoff, onReactivate, onViewQr, o
             item.units ? unitsTestTypesSection : flatTestTypesSection,
             React.createElement("div", { style: { marginTop: 28 } },
                 React.createElement(SectionLabel, { icon: React.createElement(History, { size: 13 }) }, "Sign-off history"),
-                React.createElement(SignoffHistoryTable, { log: log })))));
+                React.createElement(SignoffHistoryTable, { log: log, loading: logLoading })))));
 }
-function SignoffHistoryTable({ log }) {
+function SignoffHistoryTable({ log, loading }) {
+    if (loading) {
+        return React.createElement("div", { style: { color: MUTED, fontSize: 13, marginTop: 10 } }, "Loading history…");
+    }
     if (log.length === 0) {
         return React.createElement("div", { style: { color: MUTED, fontSize: 13, marginTop: 10 } }, "No sign-offs logged yet.");
     }
