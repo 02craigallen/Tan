@@ -31977,14 +31977,14 @@ function DueTodayModal({ rows, onClose, onSignoff, onOpenItem }) {
     const groupCards = groups.map((g) => React.createElement(DueTodayGroup, { key: g.equipment.id + (g.unit ? g.unit.id : ""), group: g, onSignoff: onSignoff, onOpenItem: onOpenItem }));
     return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
         React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" } }),
-        React.createElement("div", { style: { position: "relative", background: BG, border: `1px solid ${LINE}`, borderRadius: 10, width: "min(520px, 100%)", padding: 22, maxHeight: "85vh", overflowY: "auto" } },
-            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 } },
+        React.createElement("div", { style: { position: "relative", background: BG, border: `1px solid ${LINE}`, borderRadius: 10, width: "min(1100px, 95vw)", padding: 24, maxHeight: "88vh", overflowY: "auto" } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 } },
                 React.createElement("div", null,
                     React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, color: MUTED, letterSpacing: 1, textTransform: "uppercase" } }, todayLong()),
-                    React.createElement("h3", { style: { fontFamily: DISPLAY_FONT, fontSize: 22, margin: "2px 0 0", fontWeight: 600 } }, "Tests due today")),
+                    React.createElement("h3", { style: { fontFamily: DISPLAY_FONT, fontSize: 26, margin: "2px 0 0", fontWeight: 600 } }, "Tests due today")),
                 React.createElement("button", { onClick: onClose, style: { background: "none", border: "none", color: MUTED } },
-                    React.createElement(X, { size: 18 }))),
-            groups.length === 0 ? (React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "Nothing due today. All caught up.")) : React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, groupCards))));
+                    React.createElement(X, { size: 20 }))),
+            groups.length === 0 ? (React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "Nothing due today. All caught up.")) : React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 } }, groupCards))));
 }
 function OverdueGroup({ group, onSignoff, onOpenItem }) {
     const { equipment, unit, tasks } = group;
@@ -32023,14 +32023,14 @@ function OverdueModal({ rows, onClose, onSignoff, onOpenItem }) {
     const groupCards = groups.map((g) => React.createElement(OverdueGroup, { key: g.equipment.id + (g.unit ? g.unit.id : ""), group: g, onSignoff: onSignoff, onOpenItem: onOpenItem }));
     return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
         React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" } }),
-        React.createElement("div", { style: { position: "relative", background: BG, border: `1px solid ${LINE}`, borderRadius: 10, width: "min(520px, 100%)", padding: 22, maxHeight: "85vh", overflowY: "auto" } },
-            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 } },
+        React.createElement("div", { style: { position: "relative", background: BG, border: `1px solid ${LINE}`, borderRadius: 10, width: "min(1100px, 95vw)", padding: 24, maxHeight: "88vh", overflowY: "auto" } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 } },
                 React.createElement("div", null,
                     React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, color: MUTED, letterSpacing: 1, textTransform: "uppercase" } }, todayLong()),
-                    React.createElement("h3", { style: { fontFamily: DISPLAY_FONT, fontSize: 22, margin: "2px 0 0", fontWeight: 600 } }, "Overdue tests")),
+                    React.createElement("h3", { style: { fontFamily: DISPLAY_FONT, fontSize: 26, margin: "2px 0 0", fontWeight: 600 } }, "Overdue tests")),
                 React.createElement("button", { onClick: onClose, style: { background: "none", border: "none", color: MUTED } },
-                    React.createElement(X, { size: 18 }))),
-            groups.length === 0 ? (React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "Nothing overdue. All caught up.")) : React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, groupCards))));
+                    React.createElement(X, { size: 20 }))),
+            groups.length === 0 ? (React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "Nothing overdue. All caught up.")) : React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 } }, groupCards))));
 }
 function todayLong() {
     return new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
