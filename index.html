@@ -31758,9 +31758,15 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
                 React.createElement("button", { onClick: resetToStarterData, style: primaryBtn }, "Yes, reset")))),
         showDueToday && (React.createElement(DueTodayModal, { rows: dueToday, onClose: () => setShowDueToday(false), onSignoff: (equipment, testType, unit) => {
                 setSignoffFor({ equipment, testType, unit });
+            }, onOpenItem: (equipment) => {
+                setShowDueToday(false);
+                setSelected(equipment);
             } })),
         showOverdue && (React.createElement(OverdueModal, { rows: overdueRows, onClose: () => setShowOverdue(false), onSignoff: (equipment, testType, unit) => {
                 setSignoffFor({ equipment, testType, unit });
+            }, onOpenItem: (equipment) => {
+                setShowOverdue(false);
+                setSelected(equipment);
             } }))));
 }
 // ---------- design tokens ----------
@@ -31929,17 +31935,18 @@ function Header({ onAdd, onDueToday, dueTodayCount, onOverdue, overdueCount, onB
                 React.createElement(Plus, { size: 16 }),
                 " Add equipment"))));
 }
-function DueTodayGroup({ group, onSignoff }) {
+function DueTodayGroup({ group, onSignoff, onOpenItem }) {
     const { equipment, unit, tasks } = group;
     const taskRows = tasks.map(({ testType }) => React.createElement("div", { key: testType.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, paddingTop: 8, marginTop: 8, borderTop: `1px solid ${LINE}` } },
         React.createElement("div", { style: { fontSize: 13.5 } }, testType.name),
         React.createElement("button", { onClick: () => onSignoff(equipment, testType, unit), style: { background: RED, color: "#fff", border: "none", padding: "6px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" } }, "Sign off")));
     return React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "12px 14px" } },
+        React.createElement("button", { onClick: () => onOpenItem(equipment), style: { background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", display: "block", width: "100%", color: "inherit" } },
         React.createElement("div", { style: { fontWeight: 600, fontSize: 15 } },
             equipment.name,
             unit && React.createElement("span", { style: { color: MUTED, fontWeight: 500 } },
                 " \u00B7 ",
-                unit.label)),
+                unit.label))),
         React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 2 } },
             equipment.location,
             " \u00B7 ",
@@ -31949,7 +31956,7 @@ function DueTodayGroup({ group, onSignoff }) {
             " due"),
         taskRows);
 }
-function DueTodayModal({ rows, onClose, onSignoff }) {
+function DueTodayModal({ rows, onClose, onSignoff, onOpenItem }) {
     const groups = [];
     const groupIndex = {};
     rows.forEach(({ equipment, testType, unit }) => {
@@ -31960,7 +31967,7 @@ function DueTodayModal({ rows, onClose, onSignoff }) {
         }
         groups[groupIndex[key]].tasks.push({ testType });
     });
-    const groupCards = groups.map((g) => React.createElement(DueTodayGroup, { key: g.equipment.id + (g.unit ? g.unit.id : ""), group: g, onSignoff: onSignoff }));
+    const groupCards = groups.map((g) => React.createElement(DueTodayGroup, { key: g.equipment.id + (g.unit ? g.unit.id : ""), group: g, onSignoff: onSignoff, onOpenItem: onOpenItem }));
     return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
         React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" } }),
         React.createElement("div", { style: { position: "relative", background: BG, border: `1px solid ${LINE}`, borderRadius: 10, width: "min(520px, 100%)", padding: 22, maxHeight: "85vh", overflowY: "auto" } },
@@ -31972,7 +31979,7 @@ function DueTodayModal({ rows, onClose, onSignoff }) {
                     React.createElement(X, { size: 18 }))),
             groups.length === 0 ? (React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "Nothing due today. All caught up.")) : React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, groupCards))));
 }
-function OverdueGroup({ group, onSignoff }) {
+function OverdueGroup({ group, onSignoff, onOpenItem }) {
     const { equipment, unit, tasks } = group;
     const taskRows = tasks.map(({ testType }) => React.createElement("div", { key: testType.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, paddingTop: 8, marginTop: 8, borderTop: `1px solid ${LINE}` } },
         React.createElement("div", null,
@@ -31980,11 +31987,12 @@ function OverdueGroup({ group, onSignoff }) {
             React.createElement("div", { style: { fontSize: 11.5, color: RED, fontWeight: 600, marginTop: 1 } }, dueInfo(testType).label)),
         React.createElement("button", { onClick: () => onSignoff(equipment, testType, unit), style: { background: RED, color: "#fff", border: "none", padding: "6px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" } }, "Sign off")));
     return React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "12px 14px" } },
+        React.createElement("button", { onClick: () => onOpenItem(equipment), style: { background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", display: "block", width: "100%", color: "inherit" } },
         React.createElement("div", { style: { fontWeight: 600, fontSize: 15 } },
             equipment.name,
             unit && React.createElement("span", { style: { color: MUTED, fontWeight: 500 } },
                 " · ",
-                unit.label)),
+                unit.label))),
         React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 2 } },
             equipment.location,
             " · ",
@@ -31994,7 +32002,7 @@ function OverdueGroup({ group, onSignoff }) {
             " overdue"),
         taskRows);
 }
-function OverdueModal({ rows, onClose, onSignoff }) {
+function OverdueModal({ rows, onClose, onSignoff, onOpenItem }) {
     const groups = [];
     const groupIndex = {};
     rows.forEach(({ equipment, testType, unit }) => {
@@ -32005,7 +32013,7 @@ function OverdueModal({ rows, onClose, onSignoff }) {
         }
         groups[groupIndex[key]].tasks.push({ testType });
     });
-    const groupCards = groups.map((g) => React.createElement(OverdueGroup, { key: g.equipment.id + (g.unit ? g.unit.id : ""), group: g, onSignoff: onSignoff }));
+    const groupCards = groups.map((g) => React.createElement(OverdueGroup, { key: g.equipment.id + (g.unit ? g.unit.id : ""), group: g, onSignoff: onSignoff, onOpenItem: onOpenItem }));
     return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
         React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" } }),
         React.createElement("div", { style: { position: "relative", background: BG, border: `1px solid ${LINE}`, borderRadius: 10, width: "min(520px, 100%)", padding: 22, maxHeight: "85vh", overflowY: "auto" } },
