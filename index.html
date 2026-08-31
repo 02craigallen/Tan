@@ -31243,7 +31243,12 @@ const seedEquipment = () => [
         ],
     },
 ];
+// Event-triggered checks (done when something specific happens, not on a schedule) never
+// count as due or overdue — they're signed off manually when the triggering event occurs.
+const EVENT_BASED_TEST_RE = /after\s*use|on\s*acceptance|after\s*repair/i;
 function dueInfo(testType) {
+    if (EVENT_BASED_TEST_RE.test(testType.name))
+        return { label: "As required", state: "event", days: null };
     if (!testType.lastCompleted)
         return { label: "Never tested", state: "overdue", days: null };
     const due = daysBetween(todayISO(), addDays(testType.lastCompleted, testType.intervalDays));
@@ -31259,9 +31264,9 @@ function addDays(iso, n) {
     return localDateStr(d);
 }
 function isDueToday(testType) {
-    // "After Use" checks are logged when someone's actually used the item on an incident,
-    // not on a schedule — they don't belong on a daily list nobody can action in advance.
-    if (/after\s*use/i.test(testType.name))
+    // Event-triggered checks are logged when something specific happens, not on a
+    // schedule — they don't belong on a daily list nobody can action in advance.
+    if (EVENT_BASED_TEST_RE.test(testType.name))
         return false;
     if (!testType.lastCompleted)
         // Never tested: only daily-cadence checks belong on today's list. A never-done
@@ -31311,6 +31316,7 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
     const [selected, setSelected] = useState(null);
     const [showAdd, setShowAdd] = useState(false);
     const [showDueToday, setShowDueToday] = useState(false);
+    const [showOverdue, setShowOverdue] = useState(false);
     const [lookupId, setLookupId] = useState("");
     const [lookupError, setLookupError] = useState("");
     const [qrFor, setQrFor] = useState(null);
@@ -31563,6 +31569,26 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
         });
         return rows;
     }, [equipment]);
+    const overdueRows = useMemo(() => {
+        if (!equipment)
+            return [];
+        const rows = [];
+        equipment.forEach((eq) => {
+            if (eq.units) {
+                unitTestTypes(eq).forEach((row) => {
+                    if (dueInfo(row).state === "overdue")
+                        rows.push({ equipment: eq, unit: row.unit, testType: row.testType });
+                });
+            }
+            else {
+                eq.testTypes.forEach((t) => {
+                    if (dueInfo(t).state === "overdue")
+                        rows.push({ equipment: eq, testType: t });
+                });
+            }
+        });
+        return rows;
+    }, [equipment]);
     function toggleWithdrawn(eq) {
         const next = equipment.map((e) => (e.id === eq.id ? { ...e, withdrawn: !e.withdrawn } : e));
         persistEquipment(next);
@@ -31631,7 +31657,7 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
         React.createElement(FontImport, null),
         React.createElement(TopBanner, null),
         React.createElement("div", { style: { maxWidth: 1180, margin: "0 auto", padding: "28px 20px 60px", position: "relative" } },
-            React.createElement(Header, { onAdd: () => setShowAdd(true), onDueToday: () => setShowDueToday(true), dueTodayCount: dueToday.length, onBack: onBack, selectMode: selectMode, onToggleSelectMode: () => {
+            React.createElement(Header, { onAdd: () => setShowAdd(true), onDueToday: () => setShowDueToday(true), dueTodayCount: dueToday.length, onOverdue: () => setShowOverdue(true), overdueCount: overdueRows.length, onBack: onBack, selectMode: selectMode, onToggleSelectMode: () => {
                     setSelectMode((v) => !v);
                     setSelectedIds(new Set());
                 }, onManageCategories: () => setShowManageCategories(true), onManageLocations: () => setShowManageLocations(true) }),
@@ -31722,6 +31748,9 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
                 React.createElement("button", { onClick: resetToStarterData, style: primaryBtn }, "Yes, reset")))),
         showDueToday && (React.createElement(DueTodayModal, { rows: dueToday, onClose: () => setShowDueToday(false), onSignoff: (equipment, testType, unit) => {
                 setSignoffFor({ equipment, testType, unit });
+            } })),
+        showOverdue && (React.createElement(OverdueModal, { rows: overdueRows, onClose: () => setShowOverdue(false), onSignoff: (equipment, testType, unit) => {
+                setSignoffFor({ equipment, testType, unit });
             } }))));
 }
 // ---------- design tokens ----------
@@ -31772,7 +31801,7 @@ function TopBanner() {
                 React.createElement("button", { onClick: () => { clearSession(); window.location.reload(); }, style: { background: "none", border: "1px solid rgba(241,236,225,0.35)", color: "#F1ECE1", padding: "6px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" } }, "Log out")))))));
 }
 // ---------- header ----------
-function Header({ onAdd, onDueToday, dueTodayCount, onBack, selectMode, onToggleSelectMode, onManageCategories, onManageLocations }) {
+function Header({ onAdd, onDueToday, dueTodayCount, onOverdue, overdueCount, onBack, selectMode, onToggleSelectMode, onManageCategories, onManageLocations }) {
     return (React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6, flexWrap: "wrap", gap: 16 } },
         React.createElement("div", null,
             onBack && (React.createElement("button", { onClick: onBack, style: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: MUTED, fontSize: 13, padding: 0, marginBottom: 10 } },
@@ -31848,6 +31877,33 @@ function Header({ onAdd, onDueToday, dueTodayCount, onBack, selectMode, onToggle
                         justifyContent: "center",
                         padding: "0 6px",
                     } }, dueTodayCount))),
+            React.createElement("button", { onClick: onOverdue, style: {
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    background: PANEL,
+                    color: INK,
+                    border: `1px solid ${LINE}`,
+                    padding: "10px 18px",
+                    borderRadius: 6,
+                    fontWeight: 600,
+                    fontSize: 14,
+                } },
+                React.createElement(AlertTriangle, { size: 16, color: overdueCount > 0 ? RED : MUTED }),
+                "Overdue",
+                overdueCount > 0 && (React.createElement("span", { style: {
+                        background: RED,
+                        color: "#fff",
+                        borderRadius: 999,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        minWidth: 20,
+                        height: 20,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "0 6px",
+                    } }, overdueCount))),
             React.createElement("button", { onClick: onAdd, style: {
                     display: "flex",
                     alignItems: "center",
@@ -31905,6 +31961,51 @@ function DueTodayModal({ rows, onClose, onSignoff }) {
                 React.createElement("button", { onClick: onClose, style: { background: "none", border: "none", color: MUTED } },
                     React.createElement(X, { size: 18 }))),
             groups.length === 0 ? (React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "Nothing due today. All caught up.")) : React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, groupCards))));
+}
+function OverdueGroup({ group, onSignoff }) {
+    const { equipment, unit, tasks } = group;
+    const taskRows = tasks.map(({ testType }) => React.createElement("div", { key: testType.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, paddingTop: 8, marginTop: 8, borderTop: `1px solid ${LINE}` } },
+        React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 13.5 } }, testType.name),
+            React.createElement("div", { style: { fontSize: 11.5, color: RED, fontWeight: 600, marginTop: 1 } }, dueInfo(testType).label)),
+        React.createElement("button", { onClick: () => onSignoff(equipment, testType, unit), style: { background: RED, color: "#fff", border: "none", padding: "6px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" } }, "Sign off")));
+    return React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "12px 14px" } },
+        React.createElement("div", { style: { fontWeight: 600, fontSize: 15 } },
+            equipment.name,
+            unit && React.createElement("span", { style: { color: MUTED, fontWeight: 500 } },
+                " · ",
+                unit.label)),
+        React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 2 } },
+            equipment.location,
+            " · ",
+            tasks.length,
+            " check",
+            tasks.length !== 1 ? "s" : "",
+            " overdue"),
+        taskRows);
+}
+function OverdueModal({ rows, onClose, onSignoff }) {
+    const groups = [];
+    const groupIndex = {};
+    rows.forEach(({ equipment, testType, unit }) => {
+        const key = equipment.id + (unit ? unit.id : "");
+        if (!(key in groupIndex)) {
+            groupIndex[key] = groups.length;
+            groups.push({ equipment, unit, tasks: [] });
+        }
+        groups[groupIndex[key]].tasks.push({ testType });
+    });
+    const groupCards = groups.map((g) => React.createElement(OverdueGroup, { key: g.equipment.id + (g.unit ? g.unit.id : ""), group: g, onSignoff: onSignoff }));
+    return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
+        React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" } }),
+        React.createElement("div", { style: { position: "relative", background: BG, border: `1px solid ${LINE}`, borderRadius: 10, width: "min(520px, 100%)", padding: 22, maxHeight: "85vh", overflowY: "auto" } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 } },
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, color: MUTED, letterSpacing: 1, textTransform: "uppercase" } }, todayLong()),
+                    React.createElement("h3", { style: { fontFamily: DISPLAY_FONT, fontSize: 22, margin: "2px 0 0", fontWeight: 600 } }, "Overdue tests")),
+                React.createElement("button", { onClick: onClose, style: { background: "none", border: "none", color: MUTED } },
+                    React.createElement(X, { size: 18 }))),
+            groups.length === 0 ? (React.createElement("div", { style: { color: MUTED, fontSize: 14, padding: "20px 0" } }, "Nothing overdue. All caught up.")) : React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, groupCards))));
 }
 function todayLong() {
     return new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
