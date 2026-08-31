@@ -32209,6 +32209,7 @@ function TagCard({ item, categories, onClick, onEdit, selectMode, selected, onTo
 function DetailDrawer({ item, log, logLoading, focusUnitCode, onClose, onSignoff, onReactivate, onViewQr, onToggleWithdrawn, onPhotoChange, onRemoveTestType, onEditTestType, onAddTestType, onEditUnit, onUpdateTires }) {
     const isAdmin = currentUser && currentUser.role === "admin";
     const [photoBusy, setPhotoBusy] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
     async function handlePhotoUpload(e) {
         const file = e.target.files && e.target.files[0];
         if (!file)
@@ -32381,7 +32382,28 @@ function DetailDrawer({ item, log, logLoading, focusUnitCode, onClose, onSignoff
             item.units ? unitsTestTypesSection : flatTestTypesSection,
             React.createElement("div", { style: { marginTop: 28 } },
                 React.createElement(SectionLabel, { icon: React.createElement(History, { size: 13 }) }, "Sign-off history"),
-                React.createElement(SignoffHistoryTable, { log: log, loading: logLoading })))));
+                React.createElement("div", { style: { marginTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "12px 14px" } },
+                    React.createElement("div", { style: { fontSize: 13, color: MUTED } }, logLoading
+                        ? "Loading history…"
+                        : log.length === 0
+                            ? "No sign-offs logged yet."
+                            : `${log.length} sign-off${log.length !== 1 ? "s" : ""} on record`),
+                    !logLoading && log.length > 0 && React.createElement("button", { onClick: () => setShowHistory(true), style: { background: PANEL_RAISED, border: `1px solid ${LINE}`, color: INK, padding: "7px 12px", borderRadius: 6, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" } }, "View full history")))),
+        showHistory && React.createElement(TestHistoryModal, { item: item, log: log, onClose: () => setShowHistory(false) })));
+}
+function TestHistoryModal({ item, log, onClose }) {
+    return React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
+        React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" } }),
+        React.createElement("div", { style: { position: "relative", background: BG, border: `1px solid ${LINE}`, borderRadius: 10, width: "min(1000px, 95vw)", maxHeight: "88vh", padding: 22, display: "flex", flexDirection: "column" } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, flexShrink: 0 } },
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, color: MUTED, letterSpacing: 1, textTransform: "uppercase" } }, item.assetId),
+                    React.createElement("h3", { style: { fontFamily: DISPLAY_FONT, fontSize: 22, margin: "2px 0 0", fontWeight: 600 } }, item.name, " — Test History"),
+                    React.createElement("div", { style: { fontSize: 12.5, color: MUTED, marginTop: 4 } }, log.length, " sign-off", log.length !== 1 ? "s" : "", " on record")),
+                React.createElement("button", { onClick: onClose, style: { background: "none", border: "none", color: MUTED } },
+                    React.createElement(X, { size: 18 }))),
+            React.createElement("div", { style: { overflow: "auto", flex: 1 } },
+                React.createElement(SignoffHistoryTable, { log: log, loading: false }))));
 }
 function SignoffHistoryTable({ log, loading }) {
     if (loading) {
@@ -32405,7 +32427,7 @@ function SignoffHistoryTable({ log, loading }) {
             React.createElement("span", { style: { color: l.status === "unserviceable" ? RED : GREEN, fontWeight: 600, textTransform: "capitalize" } }, l.status)),
         React.createElement("td", { style: { padding: "8px 10px", fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" } }, l.location || "—"),
         React.createElement("td", { style: { padding: "8px 10px", fontSize: 12.5, color: INK, fontStyle: l.notes ? "italic" : "normal", minWidth: 140 } }, l.notes || "—")));
-    return React.createElement("div", { style: { marginTop: 10, maxHeight: 320, overflow: "auto", border: `1px solid ${LINE}`, borderRadius: 8 } },
+    return React.createElement("div", { style: { marginTop: 10, border: `1px solid ${LINE}`, borderRadius: 8 } },
         React.createElement("table", { style: { width: "100%", minWidth: 640, borderCollapse: "collapse" } },
             React.createElement("thead", null, headerRow),
             React.createElement("tbody", null, bodyRows)));
