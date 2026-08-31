@@ -31307,7 +31307,7 @@ function soonestDue(item) {
 const EQUIP_KEY = "ems:equipment";
 const CATEGORIES_KEY = "ems:categories";
 const LOCATIONS_KEY = "ems:locations";
-function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
+function EMSModule({ onBack, focusAssetId, focusUnitCode, onFocusHandled }) {
     const [equipment, setEquipment] = useState(null);
     const [ready, setReady] = useState(false);
     const [error, setError] = useState(null);
@@ -31317,6 +31317,7 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
     const [statusFilter, setStatusFilter] = useState("All");
     const [showActiveOnly, setShowActiveOnly] = useState(true);
     const [selected, setSelected] = useState(null);
+    const [pendingUnitCode, setPendingUnitCode] = useState(() => focusUnitCode || null);
     const [showAdd, setShowAdd] = useState(false);
     const [showDueToday, setShowDueToday] = useState(false);
     const [showOverdue, setShowOverdue] = useState(false);
@@ -31723,7 +31724,10 @@ function EMSModule({ onBack, focusAssetId, onFocusHandled }) {
                             });
                         } }))),
                     filtered.length === 0 && (React.createElement("div", { style: { gridColumn: "1/-1", padding: 40, textAlign: "center", color: MUTED, border: `1px dashed ${LINE}`, borderRadius: 10 } }, "Nothing matches. Adjust the filters, or add a new item to the register.")))))),
-        selected && (React.createElement(DetailDrawer, { item: selected, log: selectedLog, logLoading: selectedLogLoading, onClose: () => setSelected(null), onSignoff: (testType, unit) => setSignoffFor({ equipment: selected, testType, unit }), onReactivate: () => reactivate(selected), onViewQr: (target) => setQrFor(target || selected), onToggleWithdrawn: () => toggleWithdrawn(selected), onPhotoChange: (photo) => updatePhoto(selected, photo), onRemoveTestType: (testType) => removeTestType(selected, testType), onEditTestType: (testType) => setEditTestTypeFor({ equipment: selected, testType }), onAddTestType: () => setAddTestTypeFor(selected), onEditUnit: (unit) => setEditUnitFor({ equipment: selected, unit }), onUpdateTires: (tires) => updateTires(selected, tires) })),
+        selected && (React.createElement(DetailDrawer, { item: selected, log: selectedLog, logLoading: selectedLogLoading, focusUnitCode: pendingUnitCode, onClose: () => {
+                setSelected(null);
+                setPendingUnitCode(null);
+            }, onSignoff: (testType, unit) => setSignoffFor({ equipment: selected, testType, unit }), onReactivate: () => reactivate(selected), onViewQr: (target) => setQrFor(target || selected), onToggleWithdrawn: () => toggleWithdrawn(selected), onPhotoChange: (photo) => updatePhoto(selected, photo), onRemoveTestType: (testType) => removeTestType(selected, testType), onEditTestType: (testType) => setEditTestTypeFor({ equipment: selected, testType }), onAddTestType: () => setAddTestTypeFor(selected), onEditUnit: (unit) => setEditUnitFor({ equipment: selected, unit }), onUpdateTires: (tires) => updateTires(selected, tires) })),
         addTestTypeFor && (React.createElement(AddTestTypeModal, { equipment: addTestTypeFor, onCancel: () => setAddTestTypeFor(null), onSave: (values) => addTestType(addTestTypeFor, values) })),
         editTestTypeFor && (React.createElement(EditTestTypeModal, { equipment: editTestTypeFor.equipment, testType: editTestTypeFor.testType, onCancel: () => setEditTestTypeFor(null), onSave: (updates) => {
                 updateTestType(editTestTypeFor.equipment, editTestTypeFor.testType.id, updates);
@@ -32036,8 +32040,7 @@ function LookupBar({ value, onChange, onSubmit, error }) {
         error && React.createElement("span", { style: { color: RED, fontSize: 12 } }, error)));
 }
 function QrModal({ item, onClose }) {
-    const isRealItem = Boolean(item.id);
-    const qrData = isRealItem ? `${window.location.origin}/?item=${encodeURIComponent(item.assetId)}` : item.assetId;
+    const qrData = `${window.location.origin}/?item=${encodeURIComponent(item.assetId)}`;
     const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(qrData)}`;
     return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
         React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" } }),
@@ -32047,9 +32050,7 @@ function QrModal({ item, onClose }) {
             React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" } }, item.assetId),
             React.createElement("div", { style: { fontFamily: DISPLAY_FONT, fontSize: 20, fontWeight: 600, color: "#2B2419", marginTop: 2, marginBottom: 14 } }, item.name),
             React.createElement("img", { src: qrSrc, alt: `QR code for ${item.assetId}`, width: 200, height: 200, style: { margin: "0 auto", display: "block" } }),
-            React.createElement("div", { style: { fontSize: 11.5, color: "#7C7160", marginTop: 14, lineHeight: 1.5 } }, isRealItem
-                ? "Scan this with a phone camera to open this item's page directly \u2014 sign-in required first if not already signed in."
-                : "This QR just encodes the unit's ID for now \u2014 scanning it won't jump straight to the unit yet."),
+            React.createElement("div", { style: { fontSize: 11.5, color: "#7C7160", marginTop: 14, lineHeight: 1.5 } }, "Scan this with a phone camera to open this item's page directly \u2014 sign-in required first if not already signed in."),
             React.createElement("button", { onClick: () => window.print(), style: { display: "inline-flex", alignItems: "center", gap: 6, marginTop: 16, background: "#AF3A22", color: "#fff", border: "none", padding: "9px 16px", borderRadius: 6, fontSize: 13, fontWeight: 600 } },
                 React.createElement(Printer, { size: 14 }),
                 " Print tag"))));
@@ -32205,7 +32206,7 @@ function TagCard({ item, categories, onClick, onEdit, selectMode, selected, onTo
             React.createElement(ChevronRight, { size: 16, color: MUTED }))));
 }
 // ---------- detail drawer ----------
-function DetailDrawer({ item, log, logLoading, onClose, onSignoff, onReactivate, onViewQr, onToggleWithdrawn, onPhotoChange, onRemoveTestType, onEditTestType, onAddTestType, onEditUnit, onUpdateTires }) {
+function DetailDrawer({ item, log, logLoading, focusUnitCode, onClose, onSignoff, onReactivate, onViewQr, onToggleWithdrawn, onPhotoChange, onRemoveTestType, onEditTestType, onAddTestType, onEditUnit, onUpdateTires }) {
     const isAdmin = currentUser && currentUser.role === "admin";
     const [photoBusy, setPhotoBusy] = useState(false);
     async function handlePhotoUpload(e) {
@@ -32247,7 +32248,7 @@ function DetailDrawer({ item, log, logLoading, onClose, onSignoff, onReactivate,
             React.createElement(SectionLabel, null, "Test types (applies to every unit)"),
             React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, marginTop: 10 } }, unitTestTypeRows),
             addTestTypeBtn),
-        React.createElement(UnitsSection, { item: item, onSignoff: onSignoff, onViewUnitQr: onViewQr, onEditUnit: onEditUnit }));
+        React.createElement(UnitsSection, { item: item, onSignoff: onSignoff, onViewUnitQr: onViewQr, onEditUnit: onEditUnit, initialUnitCode: focusUnitCode }));
     const flatTestTypeRows = item.testTypes && item.testTypes.map((t) => {
         const info = dueInfo(t);
         const color = info.state === "overdue" ? RED : info.state === "soon" ? AMBER : MUTED;
@@ -32443,8 +32444,18 @@ function TirePanel({ tires, onSave }) {
         React.createElement(SectionLabel, null, "Tyre pressures"),
         React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 16, marginTop: 14 } }, rows)));
 }
-function UnitsSection({ item, onSignoff, onViewUnitQr, onEditUnit }) {
-    const [expandedId, setExpandedId] = useState(null);
+function unitCodeFor(item, unit) {
+    // Stable, print-safe unit code \u2014 derived from the unit's fixed position in
+    // item.units, never from a filtered/searched display list.
+    const idx = item.units.findIndex((u) => u.id === unit.id);
+    return `${item.assetId}-${String(idx + 1).padStart(2, "0")}`;
+}
+function UnitsSection({ item, onSignoff, onViewUnitQr, onEditUnit, initialUnitCode }) {
+    const [expandedId, setExpandedId] = useState(() => {
+        if (!initialUnitCode) return null;
+        const match = item.units.find((u) => unitCodeFor(item, u) === initialUnitCode);
+        return match ? match.id : null;
+    });
     const [unitQuery, setUnitQuery] = useState("");
     const units = item.units.filter((u) => u.label.toLowerCase().includes(unitQuery.toLowerCase()) || (u.otherNo || "").toLowerCase().includes(unitQuery.toLowerCase()));
     return (React.createElement("div", { style: { marginTop: 26 } },
@@ -32455,7 +32466,7 @@ function UnitsSection({ item, onSignoff, onViewUnitQr, onEditUnit }) {
                 ")")),
         React.createElement("input", { value: unitQuery, onChange: (e) => setUnitQuery(e.target.value), placeholder: "Find a unit\u2026", style: { ...inputStyle, marginTop: 8, marginBottom: 10 } }),
         React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
-            units.map((u, idx) => {
+            units.map((u) => {
                 const rows = item.testTypes.map((tt) => ({
                     testType: tt,
                     info: dueInfo({ intervalDays: tt.intervalDays, lastCompleted: (u.testStatus || {})[tt.id] || null }),
@@ -32463,7 +32474,7 @@ function UnitsSection({ item, onSignoff, onViewUnitQr, onEditUnit }) {
                 const worst = rows.some((r) => r.info.state === "overdue") ? "overdue" : rows.some((r) => r.info.state === "soon") ? "soon" : "ok";
                 const dotColor = u.withdrawn ? MUTED : u.status === "unserviceable" ? RED : worst === "overdue" ? RED : worst === "soon" ? AMBER : GREEN;
                 const isOpen = expandedId === u.id;
-                const unitCode = `${item.assetId}-${String(idx + 1).padStart(2, "0")}`;
+                const unitCode = unitCodeFor(item, u);
                 return (React.createElement("div", { key: u.id, style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, overflow: "hidden" } },
                     React.createElement("button", { onClick: () => setExpandedId(isOpen ? null : u.id), style: {
                             width: "100%",
@@ -32966,8 +32977,14 @@ function App() {
     const [session, setSession] = useState(() => loadStoredSession());
     const deepLinkAssetId = new URLSearchParams(window.location.search).get("item");
     const deepLinkView = deepLinkAssetId && deepLinkAssetId.startsWith("FE-") ? "fafa" : "ems";
+    // A unit-level QR encodes "EQ-0102-03" — split off the unit suffix so the equipment
+    // itself can still be looked up by its plain assetId, then re-attach it for UnitsSection
+    // to expand the right unit once the item's page is open.
+    const unitCodeMatch = deepLinkAssetId && deepLinkAssetId.match(/^(EQ-\d+)-\d+$/);
+    const deepLinkEquipmentAssetId = unitCodeMatch ? unitCodeMatch[1] : deepLinkAssetId;
     const [view, setView] = useState(() => (deepLinkAssetId ? deepLinkView : "dashboard"));
-    const [focusAssetId, setFocusAssetId] = useState(() => deepLinkAssetId);
+    const [focusAssetId, setFocusAssetId] = useState(() => deepLinkEquipmentAssetId);
+    const [focusUnitCode, setFocusUnitCode] = useState(() => (unitCodeMatch ? deepLinkAssetId : null));
     const [focusAssessmentId, setFocusAssessmentId] = useState(null);
     function goToAssessment(assessmentId) {
         setFocusAssessmentId(assessmentId);
@@ -32977,8 +32994,9 @@ function App() {
         return React.createElement(LoginScreen, { onLoggedIn: (user) => setSession({ user }) });
     }
     if (view === "ems")
-        return React.createElement(EMSModule, { onBack: () => setView("dashboard"), focusAssetId, onFocusHandled: () => {
+        return React.createElement(EMSModule, { onBack: () => setView("dashboard"), focusAssetId, focusUnitCode, onFocusHandled: () => {
                 setFocusAssetId(null);
+                setFocusUnitCode(null);
                 window.history.replaceState({}, "", window.location.pathname);
             } });
     if (view === "fafa")
