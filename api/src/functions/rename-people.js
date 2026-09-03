@@ -80,10 +80,17 @@ app.http("rename-people", {
         });
 
         results.practicalLog = await renameInList("practical:activity-log", (e) => {
+            let changed = false;
+            let rec = e;
             if (e.loggedBy && Object.prototype.hasOwnProperty.call(map, e.loggedBy)) {
-                return { item: { ...e, loggedBy: swap(e.loggedBy) }, changed: true };
+                rec = { ...rec, loggedBy: swap(e.loggedBy) };
+                changed = true;
             }
-            return { item: e, changed: false };
+            if (e.personName && Object.prototype.hasOwnProperty.call(map, e.personName)) {
+                rec = { ...rec, personName: swap(e.personName) };
+                changed = true;
+            }
+            return { item: rec, changed };
         });
 
         results.practicalAssessments = await renameInList("practical:assessments", (r) => {
