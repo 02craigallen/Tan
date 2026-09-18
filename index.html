@@ -33620,11 +33620,13 @@ function vehicleWorstStatus(vehicle, defects) {
 }
 function VehicleCard({ vehicle, openDefectCount, status, onClick }) {
     const dotColor = vehicle.withdrawn ? MUTED : fleetStatusColor(status);
-    return React.createElement("button", { onClick, style: { textAlign: "left", background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "16px 18px", cursor: "pointer" } },
+    return React.createElement("button", { onClick, style: { textAlign: "left", background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: 0, cursor: "pointer", overflow: "hidden" } },
+        vehicle.photo && React.createElement("img", { src: vehicle.photo, alt: "", style: { width: "100%", height: 110, objectFit: "cover", display: "block" } }),
+        React.createElement("div", { style: { padding: "16px 18px" } },
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
-            React.createElement("div", { style: { width: 36, height: 36, borderRadius: 8, background: BG, display: "flex", alignItems: "center", justifyContent: "center", color: RED } },
+            !vehicle.photo && React.createElement("div", { style: { width: 36, height: 36, borderRadius: 8, background: BG, display: "flex", alignItems: "center", justifyContent: "center", color: RED } },
                 React.createElement(Truck, { size: 18 })),
-            React.createElement("span", { style: { width: 9, height: 9, borderRadius: "50%", background: dotColor, display: "inline-block", flexShrink: 0, marginTop: 4 } })),
+            React.createElement("span", { style: { width: 9, height: 9, borderRadius: "50%", background: dotColor, display: "inline-block", flexShrink: 0, marginTop: 4, marginLeft: vehicle.photo ? "auto" : 0 } })),
         React.createElement("div", { style: { fontWeight: 600, fontSize: 16, marginTop: 10 } }, vehicle.name),
         React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 12, color: MUTED, marginTop: 2 } }, vehicle.registration || "No reg set"),
         vehicle.withdrawn && React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 6, fontWeight: 600 } }, "Withdrawn from fleet"),
@@ -33633,7 +33635,7 @@ function VehicleCard({ vehicle, openDefectCount, status, onClick }) {
             `${openDefectCount} open defect${openDefectCount !== 1 ? "s" : ""}`),
         !vehicle.withdrawn && openDefectCount === 0 && React.createElement("div", { style: { display: "inline-flex", alignItems: "center", gap: 5, marginTop: 8, background: "#E4EBDB", color: "#3C5528", padding: "3px 9px", borderRadius: 20, fontSize: 11.5, fontWeight: 600 } },
             React.createElement(CheckCircle2, { size: 11 }),
-            "No open defects"));
+            "No open defects")));
 }
 const FLEET_PRIORITIES = ["Low", "Medium", "High"];
 function AddDefectModal({ vehicle, onCancel, onAdd }) {
@@ -33763,9 +33765,23 @@ function DefectRow({ defect, expanded, onToggle, onLogAction, onResolve, onReope
                     ? React.createElement("button", { onClick: () => onResolve(defect), style: { background: GREEN, color: "#fff", border: "none", padding: "6px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 600 } }, "Mark resolved")
                     : React.createElement("button", { onClick: () => onReopen(defect), style: { background: "none", border: `1px solid ${LINE}`, color: INK, padding: "6px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 600 } }, "Reopen"))));
 }
-function VehicleDetailDrawer({ vehicle, defects, onClose, onEdit, onToggleWithdrawn, onAddDefect, onLogAction, onResolve, onReopen }) {
+function VehicleDetailDrawer({ vehicle, defects, onClose, onEdit, onToggleWithdrawn, onAddDefect, onLogAction, onResolve, onReopen, onPhotoChange }) {
     const [expandedId, setExpandedId] = useState(null);
     const [showResolved, setShowResolved] = useState(false);
+    const [photoBusy, setPhotoBusy] = useState(false);
+    async function handlePhotoUpload(e) {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        setPhotoBusy(true);
+        try {
+            const dataUrl = await resizeImageFile(file);
+            onPhotoChange(dataUrl);
+        }
+        catch {
+            // photo upload failing shouldn't block the rest of the drawer
+        }
+        setPhotoBusy(false);
+    }
     const open = defects.filter((d) => d.vehicleId === vehicle.id && d.status === "open").slice().reverse();
     const resolved = defects.filter((d) => d.vehicleId === vehicle.id && d.status === "resolved").slice().reverse();
     const mot = fleetDateStatus(vehicle.motDue);
@@ -33780,6 +33796,11 @@ function VehicleDetailDrawer({ vehicle, defects, onClose, onEdit, onToggleWithdr
                     React.createElement("h2", { style: { fontFamily: DISPLAY_FONT, fontSize: 26, margin: "4px 0 0", fontWeight: 600 } }, vehicle.name)),
                 React.createElement("button", { onClick: onClose, style: { background: "none", border: "none", color: MUTED } },
                     React.createElement(X, { size: 20 }))),
+            vehicle.photo && React.createElement("img", { src: vehicle.photo, alt: "", style: { width: "100%", height: 180, objectFit: "cover", borderRadius: 8, marginTop: 16, border: `1px solid ${LINE}` } }),
+            React.createElement("label", { style: { display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 12.5, color: MUTED, cursor: "pointer" } },
+                vehicle.photo ? "Change photo" : "Add a photo",
+                React.createElement("input", { type: "file", accept: "image/*", onChange: handlePhotoUpload, style: { display: "none" } })),
+            photoBusy && React.createElement("div", { style: { fontSize: 12, color: MUTED } }, "Processing photo…"),
             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 14, flexWrap: "wrap" } },
                 React.createElement("button", { onClick: onEdit, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: INK, padding: "5px 12px", borderRadius: 20, fontSize: 13 } },
                     React.createElement(Pencil, { size: 13 }),
@@ -33889,6 +33910,9 @@ function FleetModule({ onBack }) {
     function toggleWithdrawn(v) {
         persistVehicles(vehicles.map((x) => (x.id === v.id ? { ...x, withdrawn: !x.withdrawn } : x)));
     }
+    function updateVehiclePhoto(v, photo) {
+        persistVehicles(vehicles.map((x) => (x.id === v.id ? { ...x, photo } : x)));
+    }
     function addDefect(vehicleId, { description, reportedBy, reportedTo, priority, date }) {
         persistDefects([...defects, { id: uid(), vehicleId, description, reportedBy, reportedTo, priority, dateReported: date, status: "open", dateResolved: null, outcome: "", followUp: "", actions: [] }]);
         setAddDefectFor(null);
@@ -33961,6 +33985,7 @@ function FleetModule({ onBack }) {
             onLogAction: (defect) => setActionFor(defect),
             onResolve: (defect) => setResolveFor(defect),
             onReopen: reopenDefect,
+            onPhotoChange: (photo) => updateVehiclePhoto(selected, photo),
         }),
         showAdd && React.createElement(VehicleFormModal, { title: "Add vehicle", onCancel: () => setShowAdd(false), onSubmit: addVehicle }),
         editFor && React.createElement(VehicleFormModal, { title: "Edit vehicle", initial: editFor, onCancel: () => setEditFor(null), onSubmit: (updates) => saveVehicle(editFor.id, updates) }),
