@@ -33635,9 +33635,12 @@ function VehicleCard({ vehicle, openDefectCount, status, onClick }) {
             React.createElement(CheckCircle2, { size: 11 }),
             "No open defects"));
 }
+const FLEET_PRIORITIES = ["Low", "Medium", "High"];
 function AddDefectModal({ vehicle, onCancel, onAdd }) {
     const [description, setDescription] = useState("");
     const [reportedBy, setReportedBy] = useState(() => (currentUser && currentUser.name) || "");
+    const [reportedTo, setReportedTo] = useState("");
+    const [priority, setPriority] = useState("Low");
     const [date, setDate] = useState(todayISO());
     const canSubmit = description.trim().length > 0 && reportedBy.trim().length > 0 && date;
     return React.createElement(ModalShell, { title: "Log a defect", subtitle: vehicle.name, onCancel },
@@ -33645,10 +33648,15 @@ function AddDefectModal({ vehicle, onCancel, onAdd }) {
             React.createElement("textarea", { value: description, onChange: (e) => setDescription(e.target.value), rows: 3, placeholder: "e.g. Offside indicator not working", style: { ...inputStyle, resize: "vertical", fontFamily: BODY_FONT } })),
         React.createElement(Field, { label: "Reported by" },
             React.createElement(SignedByField, { value: reportedBy, onChange: setReportedBy })),
-        React.createElement(Field, { label: "Date" },
-            React.createElement("input", { type: "date", value: date, max: todayISO(), onChange: (e) => setDate(e.target.value), style: inputStyle })),
+        React.createElement(Field, { label: "Reported to (garage / manager / etc.)" },
+            React.createElement("input", { value: reportedTo, onChange: (e) => setReportedTo(e.target.value), placeholder: "e.g. Joe and Tyler via email", style: inputStyle })),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
+            React.createElement(Field, { label: "Priority" },
+                React.createElement("select", { value: priority, onChange: (e) => setPriority(e.target.value), style: inputStyle }, FLEET_PRIORITIES.map((p) => React.createElement("option", { key: p, value: p }, p)))),
+            React.createElement(Field, { label: "Date" },
+                React.createElement("input", { type: "date", value: date, max: todayISO(), onChange: (e) => setDate(e.target.value), style: inputStyle }))),
         React.createElement(ModalActions, { onCancel },
-            React.createElement("button", { disabled: !canSubmit, onClick: () => onAdd({ description: description.trim(), reportedBy: reportedBy.trim(), date }), style: { ...primaryBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" } }, "Log defect")));
+            React.createElement("button", { disabled: !canSubmit, onClick: () => onAdd({ description: description.trim(), reportedBy: reportedBy.trim(), reportedTo: reportedTo.trim(), priority, date }), style: { ...primaryBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" } }, "Log defect")));
 }
 function AddActionModal({ defect, onCancel, onAdd }) {
     const [note, setNote] = useState("");
@@ -33688,6 +33696,9 @@ function VehicleFormModal({ title, initial, onCancel, onSubmit }) {
     const [aerodromeDue, setAerodromeDue] = useState((initial && initial.aerodromeDue) || "");
     const [oilSpec, setOilSpec] = useState((initial && initial.oilSpec) || "");
     const [tyreSize, setTyreSize] = useState((initial && initial.tyreSize) || "");
+    const [tyrePressure, setTyrePressure] = useState((initial && initial.tyrePressure) || "");
+    const [voltage, setVoltage] = useState((initial && initial.voltage) || "");
+    const [motHistoryUrl, setMotHistoryUrl] = useState((initial && initial.motHistoryUrl) || "");
     const [notes, setNotes] = useState((initial && initial.notes) || "");
     const canSubmit = name.trim().length > 0;
     return React.createElement(ModalShell, { title, onCancel },
@@ -33704,23 +33715,43 @@ function VehicleFormModal({ title, initial, onCancel, onSubmit }) {
                 React.createElement("input", { type: "date", value: aerodromeDue, onChange: (e) => setAerodromeDue(e.target.value), style: inputStyle }))),
         React.createElement(Field, { label: "Oil spec" },
             React.createElement("input", { value: oilSpec, onChange: (e) => setOilSpec(e.target.value), placeholder: "e.g. 10W-40 fully synthetic, 12L", style: inputStyle })),
-        React.createElement(Field, { label: "Tyre size" },
-            React.createElement("input", { value: tyreSize, onChange: (e) => setTyreSize(e.target.value), placeholder: "e.g. 365/85 R20", style: inputStyle })),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
+            React.createElement(Field, { label: "Tyre size" },
+                React.createElement("input", { value: tyreSize, onChange: (e) => setTyreSize(e.target.value), placeholder: "e.g. 365/85 R20", style: inputStyle })),
+            React.createElement(Field, { label: "Tyre pressure" },
+                React.createElement("input", { value: tyrePressure, onChange: (e) => setTyrePressure(e.target.value), placeholder: "e.g. Front 65PSI, Rear 72PSI", style: inputStyle }))),
+        React.createElement(Field, { label: "Voltage" },
+            React.createElement("input", { value: voltage, onChange: (e) => setVoltage(e.target.value), placeholder: "e.g. 12V", style: inputStyle })),
+        React.createElement(Field, { label: "MOT history link (optional)" },
+            React.createElement("input", { value: motHistoryUrl, onChange: (e) => setMotHistoryUrl(e.target.value), placeholder: "https://www.check-mot.service.gov.uk/...", style: inputStyle })),
         React.createElement(Field, { label: "Other notes — anything else worth recording" },
             React.createElement("textarea", { value: notes, onChange: (e) => setNotes(e.target.value), rows: 3, style: { ...inputStyle, resize: "vertical", fontFamily: BODY_FONT } })),
         React.createElement(ModalActions, { onCancel },
-            React.createElement("button", { disabled: !canSubmit, onClick: () => onSubmit({ name: name.trim(), registration: registration.trim(), makeModel: makeModel.trim(), motDue: motDue || null, aerodromeDue: aerodromeDue || null, oilSpec: oilSpec.trim(), tyreSize: tyreSize.trim(), notes: notes.trim() }), style: { ...primaryBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" } }, "Save")));
+            React.createElement("button", { disabled: !canSubmit, onClick: () => onSubmit({ name: name.trim(), registration: registration.trim(), makeModel: makeModel.trim(), motDue: motDue || null, aerodromeDue: aerodromeDue || null, oilSpec: oilSpec.trim(), tyreSize: tyreSize.trim(), tyrePressure: tyrePressure.trim(), voltage: voltage.trim(), motHistoryUrl: motHistoryUrl.trim(), notes: notes.trim() }), style: { ...primaryBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" } }, "Save")));
+}
+function priorityColor(priority) {
+    return priority === "High" ? RED : priority === "Medium" ? AMBER : MUTED;
 }
 function DefectRow({ defect, expanded, onToggle, onLogAction, onResolve, onReopen }) {
     const actions = (defect.actions || []).slice().reverse();
     return React.createElement("div", { style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "12px 14px" } },
         React.createElement("div", { onClick: onToggle, style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, cursor: "pointer" } },
             React.createElement("div", null,
-                React.createElement("div", { style: { fontSize: 14, fontWeight: 600 } }, defect.description),
-                React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 3 } }, `Reported ${fmt(defect.dateReported)} · ${defect.reportedBy}`),
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
+                    React.createElement("div", { style: { fontSize: 14, fontWeight: 600 } }, defect.description),
+                    defect.priority && React.createElement("span", { style: { fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: priorityColor(defect.priority), border: `1px solid ${priorityColor(defect.priority)}`, borderRadius: 20, padding: "1px 8px" } }, defect.priority)),
+                React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 3 } }, `Reported ${fmt(defect.dateReported)}${defect.reportedBy ? ` · ${defect.reportedBy}` : ""}`),
+                defect.reportedTo && React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 1 } }, `Reported to ${defect.reportedTo}`),
                 defect.status === "resolved" && React.createElement("div", { style: { fontSize: 11.5, color: GREEN, marginTop: 3, fontWeight: 600 } }, `Resolved ${fmt(defect.dateResolved)}`)),
             React.createElement(ChevronRight, { size: 16, color: MUTED, style: { flexShrink: 0, marginTop: 2, transform: expanded ? "rotate(90deg)" : "none" } })),
         expanded && React.createElement("div", { style: { marginTop: 12, paddingTop: 12, borderTop: `1px solid ${LINE}` } },
+            (defect.outcome || defect.followUp) && React.createElement("div", { style: { marginBottom: 12, display: "flex", flexDirection: "column", gap: 6 } },
+                defect.outcome && React.createElement("div", { style: { fontSize: 12.5 } },
+                    React.createElement("span", { style: { color: MUTED } }, "Current status: "),
+                    defect.outcome),
+                defect.followUp && React.createElement("div", { style: { fontSize: 12.5 } },
+                    React.createElement("span", { style: { color: MUTED } }, "Follow up: "),
+                    defect.followUp)),
             actions.length > 0 && React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 } },
                 actions.map((a) => React.createElement("div", { key: a.id, style: { fontSize: 12.5 } },
                     React.createElement("div", { style: { color: INK } }, a.note),
@@ -33764,7 +33795,12 @@ function VehicleDetailDrawer({ vehicle, defects, onClose, onEdit, onToggleWithdr
                     React.createElement("div", { style: { fontSize: 11.5, color: MUTED, textTransform: "uppercase", letterSpacing: 1 } }, "Aerodrome review due"),
                     React.createElement("div", { style: { fontSize: 14.5, marginTop: 3, color: fleetStatusColor(aero.state), fontWeight: aero.state === "overdue" ? 700 : 400 } }, vehicle.aerodromeDue ? `${fmt(vehicle.aerodromeDue)} · ${aero.label}` : "Not set")),
                 React.createElement(InfoRow, { label: "Oil spec", value: vehicle.oilSpec }),
-                React.createElement(InfoRow, { label: "Tyre size", value: vehicle.tyreSize })),
+                React.createElement(InfoRow, { label: "Tyre size", value: vehicle.tyreSize }),
+                React.createElement(InfoRow, { label: "Tyre pressure", value: vehicle.tyrePressure }),
+                React.createElement(InfoRow, { label: "Voltage", value: vehicle.voltage }),
+                vehicle.motHistoryUrl && React.createElement("div", null,
+                    React.createElement("div", { style: { fontSize: 11.5, color: MUTED, textTransform: "uppercase", letterSpacing: 1 } }, "MOT history"),
+                    React.createElement("a", { href: vehicle.motHistoryUrl, target: "_blank", rel: "noopener noreferrer", style: { fontSize: 13.5, marginTop: 3, color: "#345995", display: "inline-block" } }, "Check MOT history ↗"))),
             vehicle.notes && React.createElement("div", { style: { marginTop: 16 } },
                 React.createElement(SectionLabel, null, "Notes"),
                 React.createElement("div", { style: { fontSize: 13.5, marginTop: 8, whiteSpace: "pre-wrap", lineHeight: 1.5 } }, vehicle.notes)),
@@ -33853,8 +33889,8 @@ function FleetModule({ onBack }) {
     function toggleWithdrawn(v) {
         persistVehicles(vehicles.map((x) => (x.id === v.id ? { ...x, withdrawn: !x.withdrawn } : x)));
     }
-    function addDefect(vehicleId, { description, reportedBy, date }) {
-        persistDefects([...defects, { id: uid(), vehicleId, description, reportedBy, dateReported: date, status: "open", dateResolved: null, actions: [] }]);
+    function addDefect(vehicleId, { description, reportedBy, reportedTo, priority, date }) {
+        persistDefects([...defects, { id: uid(), vehicleId, description, reportedBy, reportedTo, priority, dateReported: date, status: "open", dateResolved: null, outcome: "", followUp: "", actions: [] }]);
         setAddDefectFor(null);
     }
     function logAction(defectId, { note, by, date }) {
