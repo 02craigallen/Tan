@@ -33053,9 +33053,11 @@ function App() {
     // to expand the right unit once the item's page is open.
     const unitCodeMatch = deepLinkAssetId && deepLinkAssetId.match(/^(EQ-\d+)-\d+$/);
     const deepLinkEquipmentAssetId = unitCodeMatch ? unitCodeMatch[1] : deepLinkAssetId;
-    const [view, setView] = useState(() => (deepLinkAssetId ? deepLinkView : "dashboard"));
+    const deepLinkDefectVehicleId = new URLSearchParams(window.location.search).get("defect");
+    const [view, setView] = useState(() => (deepLinkAssetId ? deepLinkView : deepLinkDefectVehicleId ? "fleet" : "dashboard"));
     const [focusAssetId, setFocusAssetId] = useState(() => deepLinkEquipmentAssetId);
     const [focusUnitCode, setFocusUnitCode] = useState(() => (unitCodeMatch ? deepLinkAssetId : null));
+    const [focusVehicleId, setFocusVehicleId] = useState(() => deepLinkDefectVehicleId);
     const [focusAssessmentId, setFocusAssessmentId] = useState(null);
     function goToAssessment(assessmentId) {
         setFocusAssessmentId(assessmentId);
@@ -33076,7 +33078,10 @@ function App() {
                 window.history.replaceState({}, "", window.location.pathname);
             } });
     if (view === "fleet")
-        return React.createElement(FleetModule, { onBack: () => setView("dashboard") });
+        return React.createElement(FleetModule, { onBack: () => setView("dashboard"), focusVehicleId, onFocusHandled: () => {
+                setFocusVehicleId(null);
+                window.history.replaceState({}, "", window.location.pathname);
+            } });
     if (view === "watchlog")
         return React.createElement(WatchLogModule, { onBack: () => setView("dashboard") });
     if (view === "personal")
@@ -33765,7 +33770,23 @@ function DefectRow({ defect, expanded, onToggle, onLogAction, onResolve, onReope
                     ? React.createElement("button", { onClick: () => onResolve(defect), style: { background: GREEN, color: "#fff", border: "none", padding: "6px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 600 } }, "Mark resolved")
                     : React.createElement("button", { onClick: () => onReopen(defect), style: { background: "none", border: `1px solid ${LINE}`, color: INK, padding: "6px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 600 } }, "Reopen"))));
 }
-function VehicleDetailDrawer({ vehicle, defects, onClose, onEdit, onToggleWithdrawn, onAddDefect, onLogAction, onResolve, onReopen, onPhotoChange }) {
+function FleetQrModal({ vehicle, onClose }) {
+    const qrData = `${window.location.origin}/?defect=${encodeURIComponent(vehicle.id)}`;
+    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(qrData)}`;
+    return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
+        React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" } }),
+        React.createElement("div", { style: { position: "relative", background: "#fff", borderRadius: 10, width: "min(340px, 100%)", padding: 24, textAlign: "center" } },
+            React.createElement("button", { onClick: onClose, style: { position: "absolute", top: 12, right: 12, background: "none", border: "none", color: MUTED } },
+                React.createElement(X, { size: 18 })),
+            React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" } }, vehicle.registration || "Defect QR"),
+            React.createElement("div", { style: { fontFamily: DISPLAY_FONT, fontSize: 20, fontWeight: 600, color: "#2B2419", marginTop: 2, marginBottom: 14 } }, vehicle.name),
+            React.createElement("img", { src: qrSrc, alt: `Defect QR code for ${vehicle.name}`, width: 200, height: 200, style: { margin: "0 auto", display: "block" } }),
+            React.createElement("div", { style: { fontSize: 11.5, color: "#7C7160", marginTop: 14, lineHeight: 1.5 } }, "Scan this in the cab to jump straight to logging a defect on this vehicle — sign-in required first if not already signed in."),
+            React.createElement("button", { onClick: () => window.print(), style: { display: "inline-flex", alignItems: "center", gap: 6, marginTop: 16, background: "#AF3A22", color: "#fff", border: "none", padding: "9px 16px", borderRadius: 6, fontSize: 13, fontWeight: 600 } },
+                React.createElement(Printer, { size: 14 }),
+                " Print tag"))));
+}
+function VehicleDetailDrawer({ vehicle, defects, onClose, onEdit, onToggleWithdrawn, onAddDefect, onLogAction, onResolve, onReopen, onPhotoChange, onViewQr }) {
     const [expandedId, setExpandedId] = useState(null);
     const [showResolved, setShowResolved] = useState(false);
     const [photoBusy, setPhotoBusy] = useState(false);
@@ -33805,6 +33826,9 @@ function VehicleDetailDrawer({ vehicle, defects, onClose, onEdit, onToggleWithdr
                 React.createElement("button", { onClick: onEdit, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: INK, padding: "5px 12px", borderRadius: 20, fontSize: 13 } },
                     React.createElement(Pencil, { size: 13 }),
                     " Edit vehicle info"),
+                React.createElement("button", { onClick: onViewQr, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: INK, padding: "5px 12px", borderRadius: 20, fontSize: 13 } },
+                    React.createElement(QrCode, { size: 13 }),
+                    " Defect QR code"),
                 React.createElement("button", { onClick: onToggleWithdrawn, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: vehicle.withdrawn ? GREEN : RED, padding: "5px 12px", borderRadius: 20, fontSize: 13 } }, vehicle.withdrawn ? "Restore to fleet" : "Withdraw from fleet")),
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 22, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: 16 } },
                 React.createElement(InfoRow, { label: "Make / model", value: vehicle.makeModel }),
@@ -33839,7 +33863,7 @@ function VehicleDetailDrawer({ vehicle, defects, onClose, onEdit, onToggleWithdr
                     ` Solved defects (${resolved.length})`),
                 showResolved && React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, marginTop: 10 } }, resolved.map(rowFor)))));
 }
-function FleetModule({ onBack }) {
+function FleetModule({ onBack, focusVehicleId, onFocusHandled }) {
     const [vehicles, setVehicles] = useState(null);
     const [defects, setDefects] = useState(null);
     const [ready, setReady] = useState(false);
@@ -33850,6 +33874,16 @@ function FleetModule({ onBack }) {
     const [addDefectFor, setAddDefectFor] = useState(null);
     const [actionFor, setActionFor] = useState(null);
     const [resolveFor, setResolveFor] = useState(null);
+    const [qrFor, setQrFor] = useState(null);
+    useEffect(() => {
+        if (!ready || !focusVehicleId || !vehicles) return;
+        const match = vehicles.find((v) => v.id === focusVehicleId);
+        if (match) {
+            setSelectedId(match.id);
+            setAddDefectFor(match);
+        }
+        if (onFocusHandled) onFocusHandled();
+    }, [ready, focusVehicleId, vehicles]);
     useEffect(() => {
         (async () => {
             try {
@@ -33986,7 +34020,9 @@ function FleetModule({ onBack }) {
             onResolve: (defect) => setResolveFor(defect),
             onReopen: reopenDefect,
             onPhotoChange: (photo) => updateVehiclePhoto(selected, photo),
+            onViewQr: () => setQrFor(selected),
         }),
+        qrFor && React.createElement(FleetQrModal, { vehicle: qrFor, onClose: () => setQrFor(null) }),
         showAdd && React.createElement(VehicleFormModal, { title: "Add vehicle", onCancel: () => setShowAdd(false), onSubmit: addVehicle }),
         editFor && React.createElement(VehicleFormModal, { title: "Edit vehicle", initial: editFor, onCancel: () => setEditFor(null), onSubmit: (updates) => saveVehicle(editFor.id, updates) }),
         addDefectFor && React.createElement(AddDefectModal, { vehicle: addDefectFor, onCancel: () => setAddDefectFor(null), onAdd: (payload) => addDefect(addDefectFor.id, payload) }),
