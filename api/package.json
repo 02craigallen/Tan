@@ -7,6 +7,7 @@
     "start": "func start"
   },
   "dependencies": {
+    "@azure/communication-email": "^1.0.0",
     "@azure/cosmos": "^4.1.1",
     "@azure/functions": "^4.5.1",
     "bcryptjs": "^2.4.3",
