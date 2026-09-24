@@ -30351,6 +30351,9 @@ const usersApi = {
 const exportApi = {
     all: () => apiFetch("/export"),
 };
+const weatherApi = {
+    live: () => apiFetch("/weather"),
+};
 
 </script>
 <script>
@@ -34083,6 +34086,7 @@ const INCIDENT_TYPES = [
     },
     {
         key: "Weather Standby",
+        hasLiveWeather: true,
         fields: [
             { key: "weatherType", label: "Weather type", type: "text" },
             { key: "runwayInUse", label: "Runway in Use", type: "text" },
@@ -34099,6 +34103,7 @@ const INCIDENT_TYPES = [
     },
     {
         key: "Royal Standby",
+        hasLiveWeather: true,
         fields: [
             { key: "weatherType", label: "Weather type", type: "text" },
             { key: "runwayInUse", label: "Runway in Use", type: "text" },
@@ -34262,6 +34267,22 @@ function IncidentFormModal({ initial, onCancel, onSubmit }) {
     const [aircraftRows, setAircraftRows] = useState(() => (initial && initial.aircraftRows) || emptyTableRows(def && def.aircraftTable));
     const [vehicleRows, setVehicleRows] = useState(() => (initial && initial.vehicleRows) || emptyTableRows(def && def.vehicleTable));
     const [crewRows, setCrewRows] = useState(() => (initial && initial.crewRows) || emptyCrewRows(def));
+    const [weatherBusy, setWeatherBusy] = useState(false);
+    const [weatherError, setWeatherError] = useState(null);
+    const [weatherObservedAt, setWeatherObservedAt] = useState(null);
+    async function fetchLiveWeather() {
+        setWeatherBusy(true);
+        setWeatherError(null);
+        try {
+            const data = await weatherApi.live();
+            setExtra((prev) => ({ ...prev, windDirection: data.windDirection, windSpeed: data.windSpeed, visibility: data.visibility, cloudBase: data.cloudBase, temperature: data.temperature }));
+            setWeatherObservedAt(data.observedAt);
+        }
+        catch (e) {
+            setWeatherError(e.message || "Couldn't fetch live weather — enter it manually.");
+        }
+        setWeatherBusy(false);
+    }
     function changeType(nextType) {
         const nextDef = incidentTypeDef(nextType);
         setType(nextType);
@@ -34300,7 +34321,13 @@ function IncidentFormModal({ initial, onCancel, onSubmit }) {
             React.createElement(Field, { label: "Time closed" },
                 React.createElement("input", { value: timeClosed, onChange: (e) => setTimeClosed(e.target.value), placeholder: "e.g. 15:10", style: inputStyle }))),
         def && def.fields.length > 0 && React.createElement("div", { style: { marginTop: 4, marginBottom: 14 } },
-            React.createElement(SectionLabel, null, type),
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 } },
+                React.createElement(SectionLabel, null, type),
+                def.hasLiveWeather && React.createElement("button", { type: "button", onClick: fetchLiveWeather, disabled: weatherBusy, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: "#345995", padding: "5px 12px", borderRadius: 20, fontSize: 12.5, fontWeight: 600, cursor: weatherBusy ? "default" : "pointer", opacity: weatherBusy ? 0.6 : 1 } },
+                    React.createElement(RotateCcw, { size: 12 }),
+                    weatherBusy ? " Fetching…" : " Fetch live weather (Newquay)")),
+            def.hasLiveWeather && weatherObservedAt && React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 4 } }, `Observed ${new Date(weatherObservedAt).toLocaleString("en-GB")} — wind, visibility, cloud and temperature filled in below; runway and weather type are still yours to set.`),
+            def.hasLiveWeather && weatherError && React.createElement("div", { style: { fontSize: 12, color: RED, marginTop: 4 } }, weatherError),
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 10 } },
                 def.fields.map((f) => React.createElement(Field, { key: f.key, label: f.type === "checkbox" ? "" : f.label },
                     renderExtraFieldInput(f, extra[f.key], (v) => setExtra({ ...extra, [f.key]: v })))))),
