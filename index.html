@@ -34745,7 +34745,7 @@ function CourseDetailModal({ course, isManager, onClose, onChanged, onManage }) 
             React.createElement("button", { onClick: onClose, style: { ...primaryBtn, width: "100%" } }, "Done")));
 }
 const TRAINING_LOCATIONS = ["Training Room 1", "Head Office", "External Venue", "Online"];
-const TRAINING_CATEGORIES = ["Passenger Services", "Airside", "Security", "Driving", "Assistance", "Fire", "eLearning", "External"];
+const TRAINING_CATEGORIES = ["Generic", "Health & Safety", "Passenger Services", "Airside", "Security", "Driving", "Assistance", "Fire", "eLearning", "External"];
 function CourseFormModal({ initial, onCancel, onSave }) {
     const isEdit = !!initial;
     const [title, setTitle] = useState((initial && initial.title) || "");
