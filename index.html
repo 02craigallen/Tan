@@ -30354,6 +30354,20 @@ const exportApi = {
 const weatherApi = {
     live: () => apiFetch("/weather"),
 };
+const trainingApi = {
+    listCourses: () => apiFetch("/training/courses").then((d) => d.courses),
+    getCourse: (id) => apiFetch(`/training/courses/${encodeURIComponent(id)}`).then((d) => d.course),
+    createCourse: (course) => apiFetch("/training/courses", { method: "POST", body: JSON.stringify(course) }).then((d) => d.course),
+    updateCourse: (id, updates) => apiFetch(`/training/courses/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(updates) }).then((d) => d.course),
+    cancelCourse: (id) => apiFetch(`/training/courses/${encodeURIComponent(id)}/cancel`, { method: "POST" }).then((d) => d.course),
+    attendees: (id) => apiFetch(`/training/courses/${encodeURIComponent(id)}/attendees`),
+    enrol: (id) => apiFetch(`/training/courses/${encodeURIComponent(id)}/enrol`, { method: "POST" }),
+    cancelEnrolment: (id) => apiFetch(`/training/courses/${encodeURIComponent(id)}/cancel-enrolment`, { method: "POST" }),
+    enrolOthers: (id, emails) => apiFetch(`/training/courses/${encodeURIComponent(id)}/enrol-others`, { method: "POST", body: JSON.stringify({ emails }) }),
+    removeAttendee: (id, email) => apiFetch(`/training/courses/${encodeURIComponent(id)}/remove-attendee`, { method: "POST", body: JSON.stringify({ email }) }),
+    myCourses: () => apiFetch("/training/my-courses"),
+    people: () => apiFetch("/training/people").then((d) => d.people),
+};
 
 </script>
 <script>
@@ -30490,6 +30504,10 @@ const Truck = (p) => React.createElement(IconBase, { ...p },
     React.createElement("path", { d: "M14 8h4l3 3v5h-7V8z" }),
     React.createElement("circle", { cx: "5.5", cy: "18.5", r: "2.5" }),
     React.createElement("circle", { cx: "17.5", cy: "18.5", r: "2.5" }));
+const GraduationCap = (p) => React.createElement(IconBase, { ...p },
+    React.createElement("path", { d: "M2 9l10-5 10 5-10 5-10-5Z" }),
+    React.createElement("path", { d: "M6 11.5V17c0 1.5 2.5 3 6 3s6-1.5 6-3v-5.5" }),
+    React.createElement("path", { d: "M22 9v6" }));
 // ---------- helpers ----------
 // Deliberately local-time, not UTC (toISOString()) — a date-only string like "2026-08-12"
 // has no timezone of its own, so every function here must read/write calendar dates using
@@ -33087,6 +33105,8 @@ function App() {
             } });
     if (view === "incidents")
         return React.createElement(IncidentModule, { onBack: () => setView("dashboard") });
+    if (view === "training")
+        return React.createElement(TrainingModule, { onBack: () => setView("dashboard") });
     if (view === "watchlog")
         return React.createElement(WatchLogModule, { onBack: () => setView("dashboard") });
     if (view === "personal")
@@ -33116,6 +33136,7 @@ function Dashboard({ onOpen }) {
                 React.createElement(ModuleCard, { eyebrow: "Equipment", title: "FAFAs", desc: "Fire extinguishers across every building on the airport, organised by location, with test dates and QR tags.", icon: React.createElement(Flame, { size: 22 }), color: "#AF3A22", live: true, onClick: () => onOpen("fafa") }),
                 React.createElement(ModuleCard, { eyebrow: "Fleet", title: "Vehicle Status", desc: "Every appliance in one place — outstanding defects, actions taken, and MOT, oil, tyre and aerodrome review info.", icon: React.createElement(Truck, { size: 22 }), color: "#3D5A80", live: true, onClick: () => onOpen("fleet") }),
                 React.createElement(ModuleCard, { eyebrow: "Watch Room", title: "Incident Log", desc: "Log any incident — aircraft, ground, standby, medical and more — each with the details that type actually needs.", icon: React.createElement(AlertTriangle, { size: 22 }), color: "#8B3A62", live: true, onClick: () => onOpen("incidents") }),
+                React.createElement(ModuleCard, { eyebrow: "Training", title: "Training", desc: "Browse and book training courses, or set up and manage courses for the whole crew.", icon: React.createElement(GraduationCap, { size: 22 }), color: "#345995", live: true, onClick: () => onOpen("training") }),
                 React.createElement(ModuleCard, { eyebrow: "Watch Room", title: "Watchroom Log", desc: "A permanent, timestamped record of the day, plus the riders board alongside it. Nothing can be edited or removed once entered.", icon: React.createElement(FileText, { size: 22 }), color: "#2E6E7E", live: true, onClick: () => onOpen("watchlog") }),
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Practical", desc: "Log practical activities and evidence — formal sign-off against versioned criteria comes next.", icon: React.createElement(ClipboardCheck, { size: 22 }), color: AMBER, live: true, onClick: () => onOpen("practical") }),
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Theory", desc: "Self-declared understanding, gated behind reading the material. Concept preview of the full item list available now.", icon: React.createElement(BookOpen, { size: 22 }), color: GREEN, badge: "Preview", onClick: () => onOpen("theory") }),
@@ -34541,6 +34562,488 @@ function IncidentModule({ onBack }) {
         }),
         showAdd && React.createElement(IncidentFormModal, { onCancel: () => setShowAdd(false), onSubmit: addIncident }),
         editFor && React.createElement(IncidentFormModal, { initial: editFor, onCancel: () => setEditFor(null), onSubmit: (payload) => saveIncident(editFor.id, payload) }));
+}
+
+// ---------- Training module ----------
+function courseStatusChip(course) {
+    if (course.status === "cancelled") return { label: "Cancelled", color: MUTED };
+    if (course.userEnrolled) return { label: "Enrolled", color: GREEN };
+    if ((course.spacesRemaining || 0) <= 0) return { label: "Full", color: RED };
+    return { label: "Available", color: GREEN };
+}
+function startOfWeek(d) {
+    const x = new Date(d);
+    const offset = (x.getDay() + 6) % 7; // Monday-first
+    x.setDate(x.getDate() - offset);
+    return x;
+}
+function weekLabel(cursor) {
+    const start = startOfWeek(cursor);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    return `${start.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} – ${end.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`;
+}
+function CourseCard({ course, onClick }) {
+    const chip = courseStatusChip(course);
+    return React.createElement("button", { onClick, style: { textAlign: "left", background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "12px 14px", cursor: "pointer", width: "100%" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 } },
+            React.createElement("div", { style: { fontWeight: 600, fontSize: 14 } }, course.title),
+            React.createElement("span", { style: { fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: "#fff", background: chip.color, borderRadius: 20, padding: "2px 8px", whiteSpace: "nowrap" } }, chip.label)),
+        React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 4 } }, `${fmt(course.courseDate)} · ${course.startTime}–${course.endTime}`),
+        course.location && React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 2 } }, course.location));
+}
+function MonthGrid({ cursor, eventsByDate, onOpenDay }) {
+    const year = cursor.getFullYear(), month = cursor.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const startOffset = (firstDay.getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < startOffset; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    function isoFor(day) { return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`; }
+    return React.createElement("div", { style: { marginTop: 16, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, overflow: "hidden" } },
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", background: PANEL_RAISED } },
+            ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => React.createElement("div", { key: d, style: { padding: "8px 6px", textAlign: "center", fontSize: 11, color: MUTED, fontWeight: 600, textTransform: "uppercase" } }, d))),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)" } },
+            cells.map((day, i) => {
+                if (!day) return React.createElement("div", { key: i, style: { borderTop: `1px solid ${LINE}`, minHeight: 90 } });
+                const iso = isoFor(day);
+                const events = eventsByDate[iso] || [];
+                const isToday = iso === todayISO();
+                return React.createElement("button", { key: i, onClick: () => events.length > 0 && onOpenDay(iso), style: {
+                        textAlign: "left", borderTop: `1px solid ${LINE}`, borderLeft: i % 7 !== 0 ? `1px solid ${LINE}` : "none",
+                        minHeight: 90, padding: 6, background: isToday ? "#F7F2E7" : "transparent", cursor: events.length > 0 ? "pointer" : "default",
+                    } },
+                    React.createElement("div", { style: { fontSize: 12, color: isToday ? RED : MUTED, fontWeight: isToday ? 700 : 500 } }, day),
+                    events.slice(0, 2).map((e) => React.createElement("div", { key: e.id, style: { fontSize: 10.5, background: courseStatusChip(e).color, color: "#fff", borderRadius: 4, padding: "1px 4px", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, e.title)),
+                    events.length > 2 && React.createElement("div", { style: { fontSize: 10, color: MUTED, marginTop: 2 } }, `+${events.length - 2} more`));
+            })));
+}
+function WeekGrid({ cursor, eventsByDate, onOpenCourse }) {
+    const start = startOfWeek(cursor);
+    const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return d; });
+    return React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 10, marginTop: 16 } },
+        days.map((d) => {
+            const iso = localDateStr(d);
+            const events = eventsByDate[iso] || [];
+            const isToday = iso === todayISO();
+            return React.createElement("div", { key: iso, style: { background: PANEL, border: `1px solid ${isToday ? RED : LINE}`, borderRadius: 8, padding: 10, minHeight: 140 } },
+                React.createElement("div", { style: { fontSize: 11, color: isToday ? RED : MUTED, fontWeight: 700, textTransform: "uppercase" } }, d.toLocaleDateString("en-GB", { weekday: "short" })),
+                React.createElement("div", { style: { fontSize: 15, fontWeight: 600, marginTop: 1 } }, d.getDate()),
+                React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 5, marginTop: 8 } },
+                    events.map((e) => React.createElement("button", { key: e.id, onClick: () => onOpenCourse(e), style: { textAlign: "left", background: courseStatusChip(e).color, color: "#fff", border: "none", borderRadius: 5, padding: "4px 6px", fontSize: 11, cursor: "pointer" } },
+                        React.createElement("div", { style: { fontWeight: 600 } }, e.title),
+                        React.createElement("div", { style: { opacity: 0.9 } }, `${e.startTime}–${e.endTime}`)))));
+        }));
+}
+function DayEventsModal({ day, courses, onClose, onOpenCourse }) {
+    return React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
+        React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" } }),
+        React.createElement("div", { style: { position: "relative", background: BG, border: `1px solid ${LINE}`, borderRadius: 10, width: "min(420px, 100%)", padding: 22, maxHeight: "80vh", overflowY: "auto" } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 } },
+                React.createElement("h3", { style: { fontFamily: DISPLAY_FONT, fontSize: 20, margin: 0, fontWeight: 600 } }, fmt(day)),
+                React.createElement("button", { onClick: onClose, style: { background: "none", border: "none", color: MUTED } }, React.createElement(X, { size: 18 }))),
+            React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, courses.map((c) => React.createElement(CourseCard, { key: c.id, course: c, onClick: () => onOpenCourse(c) })))));
+}
+function TrainingCalendar({ courses, calView, setCalView, cursor, setCursor, onOpenDay, onOpenCourse }) {
+    const eventsByDate = useMemo(() => {
+        const map = {};
+        courses.forEach((c) => {
+            if (c.status === "cancelled") return;
+            if (!map[c.courseDate]) map[c.courseDate] = [];
+            map[c.courseDate].push(c);
+        });
+        Object.values(map).forEach((list) => list.sort((a, b) => (a.startTime || "").localeCompare(b.startTime || "")));
+        return map;
+    }, [courses]);
+    function goToday() { setCursor(new Date()); }
+    function shift(days) { const d = new Date(cursor); d.setDate(d.getDate() + days); setCursor(d); }
+    function shiftMonth(n) { setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + n, 1)); }
+    const viewToggle = React.createElement("div", { style: { display: "flex", gap: 6 } },
+        ["month", "week", "list"].map((v) => React.createElement("button", { key: v, onClick: () => setCalView(v), style: {
+                background: calView === v ? RED : "none", color: calView === v ? "#fff" : INK, border: `1px solid ${calView === v ? RED : LINE}`,
+                borderRadius: 6, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, textTransform: "capitalize", cursor: "pointer",
+            } }, v)));
+    const navRow = React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 18, flexWrap: "wrap", gap: 10 } },
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+            React.createElement("button", { onClick: () => (calView === "week" ? shift(-7) : calView === "month" ? shiftMonth(-1) : shift(-30)), style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 10px" } }, React.createElement(ChevronLeft, { size: 16 })),
+            React.createElement("button", { onClick: goToday, style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 12px", fontSize: 12.5, fontWeight: 600 } }, "Today"),
+            React.createElement("button", { onClick: () => (calView === "week" ? shift(7) : calView === "month" ? shiftMonth(1) : shift(30)), style: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 6, padding: "6px 10px" } }, React.createElement(ChevronRight, { size: 16 })),
+            React.createElement("div", { style: { fontFamily: DISPLAY_FONT, fontSize: 17, fontWeight: 600, marginLeft: 6 } }, calView === "month" ? cursor.toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : calView === "week" ? weekLabel(cursor) : "Upcoming")),
+        viewToggle);
+    let grid = null;
+    if (calView === "month") grid = React.createElement(MonthGrid, { cursor, eventsByDate, onOpenDay });
+    else if (calView === "week") grid = React.createElement(WeekGrid, { cursor, eventsByDate, onOpenCourse });
+    else grid = React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginTop: 16 } },
+        courses.filter((c) => c.status === "published" && c.courseDate >= todayISO()).sort((a, b) => (a.courseDate + a.startTime).localeCompare(b.courseDate + b.startTime)).map((c) => React.createElement(CourseCard, { key: c.id, course: c, onClick: () => onOpenCourse(c) })));
+    return React.createElement(React.Fragment, null, navRow, grid);
+}
+function CourseDetailModal({ course, isManager, onClose, onChanged, onManage }) {
+    const [step, setStep] = useState("view");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState(null);
+    const chip = courseStatusChip(course);
+    async function doEnrol() {
+        setBusy(true);
+        setError(null);
+        try {
+            await trainingApi.enrol(course.id);
+            setStep("success");
+            onChanged();
+        }
+        catch (e) {
+            setError(e.message || "Couldn't enrol.");
+            setStep("view");
+        }
+        setBusy(false);
+    }
+    async function doCancelPlace() {
+        if (!window.confirm("Cancel your place on this course?")) return;
+        setBusy(true);
+        try {
+            await trainingApi.cancelEnrolment(course.id);
+            onChanged();
+            onClose();
+        }
+        catch (e) {
+            setError(e.message || "Couldn't cancel your place.");
+        }
+        setBusy(false);
+    }
+    return React.createElement(ModalShell, { title: step === "success" ? "You're booked!" : course.title, subtitle: step === "view" ? course.location : null, onCancel: onClose },
+        step === "view" && React.createElement(React.Fragment, null,
+            React.createElement("div", { style: { marginBottom: 14 } },
+                React.createElement("span", { style: { fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: "#fff", background: chip.color, borderRadius: 20, padding: "3px 10px" } }, chip.label)),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: 14, marginBottom: 14 } },
+                React.createElement(InfoRow, { label: "Date", value: fmt(course.courseDate) }),
+                React.createElement(InfoRow, { label: "Time", value: `${course.startTime} – ${course.endTime}` }),
+                React.createElement(InfoRow, { label: "Location", value: course.location }),
+                React.createElement(InfoRow, { label: "Trainer", value: course.trainer }),
+                React.createElement(InfoRow, { label: "Spaces", value: `${(course.capacity || 0) - (course.spacesRemaining || 0)} of ${course.capacity} spaces taken` })),
+            course.description && React.createElement("div", { style: { fontSize: 13.5, lineHeight: 1.5, marginBottom: 14 } }, course.description),
+            error && React.createElement("div", { style: { color: RED, fontSize: 12.5, marginBottom: 10 } }, error),
+            course.status === "cancelled" && React.createElement("div", { style: { color: MUTED, fontSize: 13 } }, "This course has been cancelled."),
+            course.status !== "cancelled" && course.userEnrolled && React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
+                React.createElement("div", { style: { color: GREEN, fontWeight: 600, fontSize: 13.5 } }, "You are enrolled on this course."),
+                React.createElement("button", { onClick: doCancelPlace, disabled: busy, style: { alignSelf: "flex-start", background: "none", border: `1px solid ${LINE}`, color: RED, padding: "8px 14px", borderRadius: 6, fontSize: 13 } }, "Cancel my place")),
+            course.status !== "cancelled" && !course.userEnrolled && (course.spacesRemaining || 0) > 0 && React.createElement("button", { onClick: () => setStep("confirm"), style: { ...primaryBtn, width: "100%" } }, "Enrol on Course"),
+            course.status !== "cancelled" && !course.userEnrolled && (course.spacesRemaining || 0) <= 0 && React.createElement("div", { style: { textAlign: "center", padding: "10px 0", color: RED, fontWeight: 600 } }, "Course Full"),
+            isManager && React.createElement("button", { onClick: onManage, style: { marginTop: 14, width: "100%", background: PANEL_RAISED, border: `1px solid ${LINE}`, color: INK, padding: "9px 14px", borderRadius: 6, fontSize: 13.5, fontWeight: 600 } }, "Manage Course")),
+        step === "confirm" && React.createElement(React.Fragment, null,
+            React.createElement("div", { style: { fontSize: 14.5, lineHeight: 1.6, marginBottom: 18 } }, `Would you like to enrol on ${course.title} on ${fmt(course.courseDate)} at ${course.startTime}?`),
+            error && React.createElement("div", { style: { color: RED, fontSize: 12.5, marginBottom: 10 } }, error),
+            React.createElement(ModalActions, { onCancel: () => setStep("view") },
+                React.createElement("button", { onClick: doEnrol, disabled: busy, style: { ...primaryBtn, opacity: busy ? 0.6 : 1 } }, busy ? "Booking…" : "Confirm Enrolment"))),
+        step === "success" && React.createElement(React.Fragment, null,
+            React.createElement("div", { style: { fontSize: 14, marginBottom: 14 } }, `Your place on ${course.title} has been confirmed.`),
+            React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: 14, marginBottom: 16 } },
+                React.createElement(InfoRow, { label: "Course", value: course.title }),
+                React.createElement(InfoRow, { label: "Date", value: fmt(course.courseDate) }),
+                React.createElement(InfoRow, { label: "Time", value: `${course.startTime} – ${course.endTime}` }),
+                React.createElement(InfoRow, { label: "Location", value: course.location })),
+            React.createElement("button", { onClick: onClose, style: { ...primaryBtn, width: "100%" } }, "Done")));
+}
+const TRAINING_LOCATIONS = ["Training Room 1", "Head Office", "External Venue", "Online"];
+function CourseFormModal({ initial, onCancel, onSave }) {
+    const isEdit = !!initial;
+    const [title, setTitle] = useState((initial && initial.title) || "");
+    const [description, setDescription] = useState((initial && initial.description) || "");
+    const [courseDate, setCourseDate] = useState((initial && initial.courseDate) || "");
+    const [startTime, setStartTime] = useState((initial && initial.startTime) || "");
+    const [endTime, setEndTime] = useState((initial && initial.endTime) || "");
+    const [location, setLocation] = useState((initial && initial.location) || "");
+    const [capacity, setCapacity] = useState((initial && initial.capacity) || 12);
+    const [confirmationEmail, setConfirmationEmail] = useState((initial && initial.confirmationEmail) || "");
+    const [trainer, setTrainer] = useState((initial && initial.trainer) || "");
+    const [joiningInstructions, setJoiningInstructions] = useState((initial && initial.joiningInstructions) || "");
+    const [status, setStatus] = useState((initial && initial.status) || "draft");
+    const [error, setError] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const canSubmit = title.trim() && courseDate && startTime && endTime && Number(capacity) > 0 && confirmationEmail.trim();
+    async function save(nextStatus) {
+        setError(null);
+        setBusy(true);
+        try {
+            await onSave({ title: title.trim(), description: description.trim(), courseDate, startTime, endTime, location: location.trim(), capacity: Number(capacity), confirmationEmail: confirmationEmail.trim(), trainer: trainer.trim(), joiningInstructions: joiningInstructions.trim(), status: nextStatus || status });
+        }
+        catch (e) {
+            setError(e.message || "Couldn't save the course.");
+        }
+        setBusy(false);
+    }
+    return React.createElement(WideModalShell, { title: isEdit ? "Edit course" : "Create course", onCancel },
+        React.createElement(Field, { label: "Course name" },
+            React.createElement("input", { value: title, onChange: (e) => setTitle(e.target.value), style: inputStyle })),
+        React.createElement(Field, { label: "Course description" },
+            React.createElement("textarea", { value: description, onChange: (e) => setDescription(e.target.value), rows: 3, style: { ...inputStyle, resize: "vertical", fontFamily: BODY_FONT } })),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 } },
+            React.createElement(Field, { label: "Course date" },
+                React.createElement("input", { type: "date", value: courseDate, onChange: (e) => setCourseDate(e.target.value), style: inputStyle })),
+            React.createElement(Field, { label: "Start time" },
+                React.createElement("input", { type: "time", value: startTime, onChange: (e) => setStartTime(e.target.value), style: inputStyle })),
+            React.createElement(Field, { label: "End time" },
+                React.createElement("input", { type: "time", value: endTime, onChange: (e) => setEndTime(e.target.value), style: inputStyle }))),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
+            React.createElement(Field, { label: "Location" },
+                React.createElement("input", { value: location, onChange: (e) => setLocation(e.target.value), list: "training-locations", placeholder: "e.g. Training Room 1", style: inputStyle }),
+                React.createElement("datalist", { id: "training-locations" }, TRAINING_LOCATIONS.map((l) => React.createElement("option", { key: l, value: l })))),
+            React.createElement(Field, { label: "Maximum attendees" },
+                React.createElement("input", { type: "number", min: 1, value: capacity, onChange: (e) => setCapacity(e.target.value), style: inputStyle }))),
+        React.createElement(Field, { label: "Course Confirmation Email Address" },
+            React.createElement("input", { type: "email", value: confirmationEmail, onChange: (e) => setConfirmationEmail(e.target.value), placeholder: "training@company.com", style: inputStyle })),
+        React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: -8, marginBottom: 14 } }, "Where enrolment notifications for this course are sent — can be different for each course."),
+        React.createElement(Field, { label: "Trainer / Instructor (optional)" },
+            React.createElement("input", { value: trainer, onChange: (e) => setTrainer(e.target.value), style: inputStyle })),
+        React.createElement(Field, { label: "Joining instructions (optional)" },
+            React.createElement("textarea", { value: joiningInstructions, onChange: (e) => setJoiningInstructions(e.target.value), rows: 2, style: { ...inputStyle, resize: "vertical", fontFamily: BODY_FONT } })),
+        isEdit && React.createElement(Field, { label: "Status" },
+            React.createElement("select", { value: status, onChange: (e) => setStatus(e.target.value), style: inputStyle },
+                React.createElement("option", { value: "draft" }, "Draft"),
+                React.createElement("option", { value: "published" }, "Published"),
+                React.createElement("option", { value: "cancelled" }, "Cancelled"))),
+        error && React.createElement("div", { style: { color: RED, fontSize: 12.5, marginBottom: 10 } }, error),
+        React.createElement(ModalActions, { onCancel },
+            isEdit
+                ? React.createElement("button", { disabled: !canSubmit || busy, onClick: () => save(), style: { ...primaryBtn, opacity: canSubmit ? 1 : 0.5 } }, "Save changes")
+                : React.createElement(React.Fragment, null,
+                    React.createElement("button", { disabled: !canSubmit || busy, onClick: () => save("draft"), style: { background: PANEL_RAISED, border: `1px solid ${LINE}`, color: INK, padding: "9px 16px", borderRadius: 6, fontSize: 14, fontWeight: 600, opacity: canSubmit ? 1 : 0.5, marginRight: 8 } }, "Save Draft"),
+                    React.createElement("button", { disabled: !canSubmit || busy, onClick: () => save("published"), style: { ...primaryBtn, opacity: canSubmit ? 1 : 0.5 } }, "Publish Course"))));
+}
+function AddPeopleModal({ course, existingEmails, onCancel, onAdded }) {
+    const [people, setPeople] = useState(null);
+    const [query, setQuery] = useState("");
+    const [selected, setSelected] = useState(() => new Set());
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState(null);
+    useEffect(() => { trainingApi.people().then(setPeople).catch(() => setPeople([])); }, []);
+    const filtered = (people || []).filter((p) => !existingEmails.has(p.email) && (!query || (p.name || "").toLowerCase().includes(query.toLowerCase()) || p.email.toLowerCase().includes(query.toLowerCase())));
+    function toggle(email) {
+        const next = new Set(selected);
+        if (next.has(email)) next.delete(email); else next.add(email);
+        setSelected(next);
+    }
+    async function addSelected() {
+        setBusy(true);
+        setError(null);
+        try {
+            const result = await trainingApi.enrolOthers(course.id, [...selected]);
+            onAdded(result);
+        }
+        catch (e) {
+            setError(e.message || "Couldn't add people.");
+        }
+        setBusy(false);
+    }
+    return React.createElement(ModalShell, { title: "Add people", subtitle: course.title, onCancel },
+        React.createElement("div", { style: { position: "relative", marginBottom: 12 } },
+            React.createElement(Search, { size: 15, style: { position: "absolute", left: 12, top: 11, color: MUTED } }),
+            React.createElement("input", { value: query, onChange: (e) => setQuery(e.target.value), placeholder: "Search by name or email…", style: { ...inputStyle, paddingLeft: 34 } })),
+        !people && React.createElement("div", { style: { color: MUTED, fontSize: 13, padding: "10px 0" } }, "Loading people…"),
+        people && React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6, maxHeight: 280, overflowY: "auto" } },
+            filtered.map((p) => React.createElement("label", { key: p.email, style: { display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: `1px solid ${LINE}`, borderRadius: 6, cursor: "pointer", background: selected.has(p.email) ? PANEL_RAISED : PANEL } },
+                React.createElement("input", { type: "checkbox", checked: selected.has(p.email), onChange: () => toggle(p.email) }),
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontSize: 13.5, fontWeight: 600 } }, p.name || p.email),
+                    React.createElement("div", { style: { fontSize: 11.5, color: MUTED } }, p.email)))),
+            filtered.length === 0 && React.createElement("div", { style: { color: MUTED, fontSize: 13, padding: "10px 0" } }, "No matching people.")),
+        error && React.createElement("div", { style: { color: RED, fontSize: 12.5, marginTop: 10 } }, error),
+        React.createElement(ModalActions, { onCancel },
+            React.createElement("button", { disabled: selected.size === 0 || busy, onClick: addSelected, style: { ...primaryBtn, opacity: selected.size === 0 ? 0.5 : 1 } }, busy ? "Adding…" : `Add to Course (${selected.size})`)));
+}
+function ManageCourseDrawer({ course, onClose, onEdit, onCancelCourse, onRefreshList }) {
+    const [data, setData] = useState(null);
+    const [error, setError] = useState(null);
+    const [showAddPeople, setShowAddPeople] = useState(false);
+    async function load() {
+        try {
+            setData(await trainingApi.attendees(course.id));
+        }
+        catch (e) {
+            setError(e.message || "Couldn't load attendees.");
+        }
+    }
+    useEffect(() => { load(); }, [course.id]);
+    async function removeAttendee(email) {
+        if (!window.confirm(`Remove ${email} from this course?`)) return;
+        try {
+            await trainingApi.removeAttendee(course.id, email);
+            load();
+            onRefreshList();
+        }
+        catch (e) {
+            setError(e.message || "Couldn't remove attendee.");
+        }
+    }
+    return React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 45 } },
+        React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" } }),
+        React.createElement("div", { style: { position: "absolute", right: 0, top: 0, bottom: 0, width: "min(640px, 100%)", background: BG, borderLeft: `1px solid ${LINE}`, overflowY: "auto", padding: 24 } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 1.5, color: MUTED, textTransform: "uppercase" } }, "Manage course"),
+                    React.createElement("h2", { style: { fontFamily: DISPLAY_FONT, fontSize: 24, margin: "4px 0 0", fontWeight: 600 } }, course.title),
+                    React.createElement("div", { style: { fontSize: 12.5, color: MUTED, marginTop: 4 } }, `${fmt(course.courseDate)} · ${course.startTime}–${course.endTime}`)),
+                React.createElement("button", { onClick: onClose, style: { background: "none", border: "none", color: MUTED } }, React.createElement(X, { size: 20 }))),
+            React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" } },
+                React.createElement("button", { onClick: onEdit, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: INK, padding: "5px 12px", borderRadius: 20, fontSize: 13 } }, React.createElement(Pencil, { size: 13 }), " Edit Course"),
+                course.status !== "cancelled" && React.createElement("button", { onClick: onCancelCourse, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: RED, padding: "5px 12px", borderRadius: 20, fontSize: 13 } }, "Cancel Course"),
+                React.createElement("button", { onClick: () => setShowAddPeople(true), style: { display: "flex", alignItems: "center", gap: 6, background: RED, color: "#fff", border: "none", padding: "5px 12px", borderRadius: 20, fontSize: 13, fontWeight: 600 } }, React.createElement(Plus, { size: 13 }), " Add People")),
+            error && React.createElement("div", { style: { color: RED, fontSize: 12.5, marginTop: 12 } }, error),
+            data && React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 } },
+                React.createElement(StatChip, { label: "Capacity", value: data.capacity, color: MUTED }),
+                React.createElement(StatChip, { label: "Confirmed", value: data.confirmed, color: GREEN }),
+                React.createElement(StatChip, { label: "Spaces remaining", value: data.spacesRemaining, color: data.spacesRemaining === 0 ? RED : AMBER })),
+            React.createElement("div", { style: { marginTop: 22 } },
+                React.createElement(SectionLabel, null, "Attendees"),
+                !data && React.createElement("div", { style: { color: MUTED, fontSize: 13, marginTop: 10 } }, "Loading…"),
+                data && data.attendees.length === 0 && React.createElement("div", { style: { color: MUTED, fontSize: 13, marginTop: 10 } }, "No one enrolled yet."),
+                data && data.attendees.length > 0 && React.createElement("div", { style: { overflowX: "auto", marginTop: 10 } },
+                    React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 13 } },
+                        React.createElement("thead", null,
+                            React.createElement("tr", null, ["Attendee", "Email", "Enrolled On", "Status", ""].map((hd) => React.createElement("th", { key: hd, style: { textAlign: "left", padding: "6px 8px", color: MUTED, fontWeight: 600, fontSize: 11.5, textTransform: "uppercase", borderBottom: `1px solid ${LINE}` } }, hd)))),
+                        React.createElement("tbody", null, data.attendees.map((a) => React.createElement("tr", { key: a.email },
+                            React.createElement("td", { style: { padding: "8px", borderBottom: `1px solid ${LINE}` } }, a.name),
+                            React.createElement("td", { style: { padding: "8px", borderBottom: `1px solid ${LINE}`, color: MUTED } }, a.email),
+                            React.createElement("td", { style: { padding: "8px", borderBottom: `1px solid ${LINE}`, color: MUTED } }, a.enrolledAt ? new Date(a.enrolledAt).toLocaleString("en-GB") : "—"),
+                            React.createElement("td", { style: { padding: "8px", borderBottom: `1px solid ${LINE}` } },
+                                React.createElement("span", { style: { fontSize: 11, fontWeight: 600, color: GREEN } }, "Confirmed"),
+                                a.enrolmentSource === "management" && React.createElement("span", { style: { fontSize: 10.5, color: MUTED, marginLeft: 6 } }, "(added by management)")),
+                            React.createElement("td", { style: { padding: "8px", borderBottom: `1px solid ${LINE}`, textAlign: "right" } },
+                                React.createElement("button", { onClick: () => removeAttendee(a.email), style: { background: "none", border: "none", color: RED, cursor: "pointer" } }, React.createElement(Trash2, { size: 14 })))))))))),
+        showAddPeople && React.createElement(AddPeopleModal, {
+            course, existingEmails: new Set((data && data.attendees.map((a) => a.email)) || []),
+            onCancel: () => setShowAddPeople(false),
+            onAdded: () => { setShowAddPeople(false); load(); onRefreshList(); },
+        }));
+}
+function TrainingModule({ onBack }) {
+    const isManager = currentUser && (currentUser.role === "management" || currentUser.role === "admin");
+    const [tab, setTab] = useState("calendar");
+    const [courses, setCourses] = useState(null);
+    const [myCourses, setMyCourses] = useState(null);
+    const [error, setError] = useState(null);
+    const [calView, setCalView] = useState("month");
+    const [cursor, setCursor] = useState(() => new Date());
+    const [activeDay, setActiveDay] = useState(null);
+    const [selectedCourse, setSelectedCourse] = useState(null);
+    const [showCreate, setShowCreate] = useState(false);
+    const [editCourse, setEditCourse] = useState(null);
+    const [manageCourse, setManageCourse] = useState(null);
+
+    async function loadCourses() {
+        try {
+            setCourses(await trainingApi.listCourses());
+        }
+        catch (e) {
+            setError(e.message || "Couldn't load courses.");
+            setCourses([]);
+        }
+    }
+    async function loadMine() {
+        try {
+            setMyCourses(await trainingApi.myCourses());
+        }
+        catch {
+            setMyCourses({ upcoming: [], previous: [] });
+        }
+    }
+    useEffect(() => { loadCourses(); loadMine(); }, []);
+    function refreshAll() { loadCourses(); loadMine(); }
+    function openCourse(c) {
+        trainingApi.getCourse(c.id).then(setSelectedCourse).catch(() => setSelectedCourse(c));
+    }
+
+    if (!courses) {
+        return React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
+            React.createElement(FontImport, null), React.createElement(TopBanner, null),
+            React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading training…"));
+    }
+
+    const header = React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6, flexWrap: "wrap", gap: 16 } },
+        React.createElement("div", null,
+            React.createElement("button", { onClick: onBack, style: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: MUTED, fontSize: 13, padding: 0, marginBottom: 10 } },
+                React.createElement(ChevronRight, { size: 14, style: { transform: "rotate(180deg)" } }), " Dashboard"),
+            React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 3, color: RED, textTransform: "uppercase", marginBottom: 4 } }, "Training"),
+            React.createElement("h1", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 34, margin: 0, letterSpacing: 0.5 } }, "Training")),
+        isManager && React.createElement("button", { onClick: () => setShowCreate(true), style: { display: "flex", alignItems: "center", gap: 8, background: RED, color: "#fff", border: "none", padding: "10px 18px", borderRadius: 6, fontWeight: 600, fontSize: 14 } },
+            React.createElement(Plus, { size: 16 }), " Add Course"));
+
+    const tabs = [
+        { key: "calendar", label: "Training Calendar" },
+        { key: "upcoming", label: "Upcoming Courses" },
+        { key: "mine", label: "My Courses" },
+        ...(isManager ? [{ key: "manage", label: "Manage Courses" }] : []),
+    ];
+    const tabRow = React.createElement("div", { style: { display: "flex", gap: 6, marginTop: 20, borderBottom: `1px solid ${LINE}`, flexWrap: "wrap" } },
+        tabs.map((t) => React.createElement("button", { key: t.key, onClick: () => setTab(t.key), style: {
+                background: "none", border: "none", borderBottom: tab === t.key ? `2px solid ${RED}` : "2px solid transparent",
+                color: tab === t.key ? INK : MUTED, fontWeight: tab === t.key ? 700 : 500, fontSize: 13.5, padding: "10px 4px", marginRight: 18, cursor: "pointer",
+            } }, t.label)));
+
+    let body = null;
+    if (tab === "calendar") {
+        body = React.createElement(TrainingCalendar, { courses, calView, setCalView, cursor, setCursor, onOpenDay: setActiveDay, onOpenCourse: openCourse });
+    }
+    else if (tab === "upcoming") {
+        const upcoming = courses.filter((c) => c.status === "published" && c.courseDate >= todayISO()).sort((a, b) => (a.courseDate + a.startTime).localeCompare(b.courseDate + b.startTime));
+        body = React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginTop: 20 } },
+            upcoming.length === 0 && React.createElement("div", { style: { color: MUTED, padding: "20px 0" } }, "No upcoming courses."),
+            upcoming.map((c) => React.createElement(CourseCard, { key: c.id, course: c, onClick: () => openCourse(c) })));
+    }
+    else if (tab === "mine") {
+        body = !myCourses ? React.createElement("div", { style: { color: MUTED, padding: "20px 0" } }, "Loading…") :
+            React.createElement("div", { style: { marginTop: 20 } },
+                React.createElement(SectionLabel, null, "Upcoming Training"),
+                React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginTop: 10, marginBottom: 26 } },
+                    myCourses.upcoming.length === 0 && React.createElement("div", { style: { color: MUTED, fontSize: 13 } }, "Nothing booked yet."),
+                    myCourses.upcoming.map((c) => React.createElement(CourseCard, { key: c.id, course: { ...c, userEnrolled: true }, onClick: () => openCourse(c) }))),
+                React.createElement(SectionLabel, null, "Previous Training"),
+                React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginTop: 10 } },
+                    myCourses.previous.length === 0 && React.createElement("div", { style: { color: MUTED, fontSize: 13 } }, "Nothing here yet."),
+                    myCourses.previous.map((c) => React.createElement(CourseCard, { key: c.id, course: { ...c, userEnrolled: c.enrolment && c.enrolment.status === "confirmed" }, onClick: () => openCourse(c) }))));
+    }
+    else if (tab === "manage") {
+        const sorted = courses.slice().sort((a, b) => (b.courseDate + (b.startTime || "")).localeCompare(a.courseDate + (a.startTime || "")));
+        body = React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginTop: 20 } },
+            sorted.length === 0 && React.createElement("div", { style: { color: MUTED, padding: "20px 0" } }, "No courses yet."),
+            sorted.map((c) => React.createElement("div", { key: c.id, style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "12px 14px" } },
+                React.createElement("div", { style: { flex: 1, cursor: "pointer" }, onClick: () => setManageCourse(c) },
+                    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                        React.createElement("div", { style: { fontWeight: 600, fontSize: 14 } }, c.title),
+                        React.createElement("span", { style: { fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: c.status === "published" ? GREEN : c.status === "cancelled" ? RED : MUTED, border: `1px solid ${c.status === "published" ? GREEN : c.status === "cancelled" ? RED : MUTED}`, borderRadius: 20, padding: "1px 8px" } }, c.status)),
+                    React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 2 } }, `${fmt(c.courseDate)} · ${c.startTime}–${c.endTime} · ${c.confirmedCount || 0}/${c.capacity}`)),
+                React.createElement("button", { onClick: () => setManageCourse(c), style: { background: PANEL_RAISED, border: `1px solid ${LINE}`, color: INK, padding: "7px 12px", borderRadius: 6, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" } }, "Manage"))));
+    }
+
+    return React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
+        React.createElement(FontImport, null), React.createElement(TopBanner, null),
+        React.createElement("div", { style: { maxWidth: 1180, margin: "0 auto", padding: "28px 20px 60px", position: "relative" } },
+            header,
+            error && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, marginTop: 16, fontSize: 13 } }, error),
+            tabRow,
+            body),
+        activeDay && React.createElement(DayEventsModal, { day: activeDay, courses: courses.filter((c) => c.courseDate === activeDay && c.status !== "cancelled"), onClose: () => setActiveDay(null), onOpenCourse: (c) => { setActiveDay(null); openCourse(c); } }),
+        selectedCourse && React.createElement(CourseDetailModal, {
+            course: selectedCourse, isManager,
+            onClose: () => setSelectedCourse(null),
+            onChanged: refreshAll,
+            onManage: () => { setManageCourse(selectedCourse); setSelectedCourse(null); },
+        }),
+        showCreate && React.createElement(CourseFormModal, {
+            onCancel: () => setShowCreate(false),
+            onSave: async (payload) => { await trainingApi.createCourse(payload); setShowCreate(false); refreshAll(); },
+        }),
+        editCourse && React.createElement(CourseFormModal, {
+            initial: editCourse,
+            onCancel: () => setEditCourse(null),
+            onSave: async (payload) => { const c = await trainingApi.updateCourse(editCourse.id, payload); setEditCourse(null); refreshAll(); setManageCourse((mc) => (mc && mc.id === editCourse.id ? c : mc)); },
+        }),
+        manageCourse && React.createElement(ManageCourseDrawer, {
+            course: manageCourse,
+            onClose: () => setManageCourse(null),
+            onEdit: () => setEditCourse(manageCourse),
+            onCancelCourse: async () => { if (window.confirm("Cancel this course? Enrolled attendees will remain visible but no new enrolments will be accepted.")) { const c = await trainingApi.cancelCourse(manageCourse.id); setManageCourse(c); refreshAll(); } },
+            onRefreshList: refreshAll,
+        }));
 }
 
 // ---------- Watch Room Log ----------
