@@ -34270,6 +34270,51 @@ function IncidentFormModal({ initial, onCancel, onSubmit }) {
     const [weatherBusy, setWeatherBusy] = useState(false);
     const [weatherError, setWeatherError] = useState(null);
     const [weatherObservedAt, setWeatherObservedAt] = useState(null);
+    const [crewPullError, setCrewPullError] = useState(null);
+    const [crewPullBusy, setCrewPullBusy] = useState(false);
+    async function pullCrewFromRidersBoard(targetDef, opts) {
+        const silent = opts && opts.silent;
+        setCrewPullBusy(true);
+        try {
+            const r = await window.storage.get("ridersboard:grid", true);
+            const board = r ? JSON.parse(r.value) : null;
+            if (!board || !Array.isArray(board.cells)) {
+                if (!silent) setCrewPullError("No Riders Board set for today yet.");
+                setCrewPullBusy(false);
+                return;
+            }
+            const cols = board.colHeaders || [];
+            const idx = (name) => cols.indexOf(name);
+            const f1 = idx("Fire 1"), f2 = idx("Fire 2"), f3 = idx("Fire 3"), cmd = idx("Command");
+            const roleLabels = targetDef && targetDef.crewRoleLabels;
+            const rowCount = roleLabels ? roleLabels.length : board.cells.length;
+            const next = [];
+            for (let i = 0; i < rowCount; i++) {
+                const row = board.cells[i] || [];
+                const fire1 = f1 >= 0 ? (row[f1] || "") : "";
+                const fire2 = f2 >= 0 ? (row[f2] || "") : "";
+                const fire3 = f3 >= 0 ? (row[f3] || "") : "";
+                const fireCommand = cmd >= 0 ? (row[cmd] || "") : "";
+                if (!roleLabels && !fire1 && !fire2 && !fire3 && !fireCommand) continue;
+                next.push({ id: uid(), roleLabel: roleLabels ? (roleLabels[i] || "") : "", fire1, fire2, fire3, bcu: "", fireCommand });
+            }
+            if (next.length === 0) {
+                setCrewRows(emptyCrewRows(targetDef));
+                if (!silent) setCrewPullError("Today's Riders Board is empty — nothing to pull in.");
+                setCrewPullBusy(false);
+                return;
+            }
+            setCrewRows(next);
+            setCrewPullError(null);
+        }
+        catch {
+            if (!silent) setCrewPullError("Couldn't read today's Riders Board.");
+        }
+        setCrewPullBusy(false);
+    }
+    useEffect(() => {
+        if (!isEdit) pullCrewFromRidersBoard(def, { silent: true });
+    }, []);
     async function fetchLiveWeather() {
         setWeatherBusy(true);
         setWeatherError(null);
@@ -34289,7 +34334,8 @@ function IncidentFormModal({ initial, onCancel, onSubmit }) {
         setExtra(emptyExtra(nextDef));
         setAircraftRows(emptyTableRows(nextDef && nextDef.aircraftTable));
         setVehicleRows(emptyTableRows(nextDef && nextDef.vehicleTable));
-        setCrewRows(emptyCrewRows(nextDef));
+        if (isEdit) setCrewRows(emptyCrewRows(nextDef));
+        else pullCrewFromRidersBoard(nextDef, { silent: true });
     }
     const canSubmit = date && incidentNumber.trim().length > 0;
     function handleSubmit() {
@@ -34338,7 +34384,12 @@ function IncidentFormModal({ initial, onCancel, onSubmit }) {
             React.createElement(SectionLabel, null, "Other vehicles/equipment involved"),
             React.createElement("div", { style: { marginTop: 10 } }, React.createElement(EditableRowsTable, { columns: def.vehicleTable.columns, rows: vehicleRows, onChange: setVehicleRows }))),
         React.createElement("div", { style: { marginBottom: 14 } },
-            React.createElement(SectionLabel, null, "Fire crew"),
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 } },
+                React.createElement(SectionLabel, null, "Fire crew"),
+                React.createElement("button", { type: "button", onClick: () => pullCrewFromRidersBoard(def, {}), disabled: crewPullBusy, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: "#345995", padding: "5px 12px", borderRadius: 20, fontSize: 12.5, fontWeight: 600, cursor: crewPullBusy ? "default" : "pointer", opacity: crewPullBusy ? 0.6 : 1 } },
+                    React.createElement(RotateCcw, { size: 12 }),
+                    crewPullBusy ? " Pulling…" : " Pull from today's Riders Board")),
+            crewPullError && React.createElement("div", { style: { fontSize: 12, color: RED, marginTop: 4 } }, crewPullError),
             React.createElement("div", { style: { marginTop: 10 } }, React.createElement(EditableRowsTable, { columns: CREW_COLS, rows: crewRows, onChange: setCrewRows, roleLabels: !!(def && def.crewRoleLabels) }))),
         React.createElement(Field, { label: "Report" },
             React.createElement("textarea", { value: report, onChange: (e) => setReport(e.target.value), rows: 4, style: { ...inputStyle, resize: "vertical", fontFamily: BODY_FONT } })),
