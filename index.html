@@ -34616,7 +34616,7 @@ function MonthGrid({ cursor, eventsByDate, onOpenDay }) {
                         minHeight: 90, padding: 6, background: isToday ? "#F7F2E7" : "transparent", cursor: events.length > 0 ? "pointer" : "default",
                     } },
                     React.createElement("div", { style: { fontSize: 12, color: isToday ? RED : MUTED, fontWeight: isToday ? 700 : 500 } }, day),
-                    events.slice(0, 2).map((e) => React.createElement("div", { key: e.id, style: { fontSize: 10.5, background: courseStatusChip(e).color, color: "#fff", borderRadius: 4, padding: "1px 4px", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, e.title)),
+                    events.slice(0, 2).map((e) => React.createElement("div", { key: e.id, style: { fontSize: 10.5, background: categoryColor(e.category), color: "#fff", borderRadius: 4, padding: "1px 4px", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, e.title)),
                     events.length > 2 && React.createElement("div", { style: { fontSize: 10, color: MUTED, marginTop: 2 } }, `+${events.length - 2} more`));
             })));
 }
@@ -34632,7 +34632,7 @@ function WeekGrid({ cursor, eventsByDate, onOpenCourse }) {
                 React.createElement("div", { style: { fontSize: 11, color: isToday ? RED : MUTED, fontWeight: 700, textTransform: "uppercase" } }, d.toLocaleDateString("en-GB", { weekday: "short" })),
                 React.createElement("div", { style: { fontSize: 15, fontWeight: 600, marginTop: 1 } }, d.getDate()),
                 React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 5, marginTop: 8 } },
-                    events.map((e) => React.createElement("button", { key: e.id, onClick: () => onOpenCourse(e), style: { textAlign: "left", background: courseStatusChip(e).color, color: "#fff", border: "none", borderRadius: 5, padding: "4px 6px", fontSize: 11, cursor: "pointer" } },
+                    events.map((e) => React.createElement("button", { key: e.id, onClick: () => onOpenCourse(e), style: { textAlign: "left", background: categoryColor(e.category), color: "#fff", border: "none", borderRadius: 5, padding: "4px 6px", fontSize: 11, cursor: "pointer" } },
                         React.createElement("div", { style: { fontWeight: 600 } }, e.title),
                         React.createElement("div", { style: { opacity: 0.9 } }, `${e.startTime}–${e.endTime}`)))));
         }));
@@ -34746,6 +34746,21 @@ function CourseDetailModal({ course, isManager, onClose, onChanged, onManage }) 
 }
 const TRAINING_LOCATIONS = ["Training Room 1", "Head Office", "External Venue", "Online"];
 const TRAINING_CATEGORIES = ["Generic", "Health & Safety", "Passenger Services", "Airside", "Security", "Driving", "Assistance", "Fire", "eLearning", "External"];
+const TRAINING_CATEGORY_COLORS = {
+    "Generic": "#7C7160",
+    "Health & Safety": "#AF3A22",
+    "Passenger Services": "#345995",
+    "Airside": "#2E6E7E",
+    "Security": "#6B5B95",
+    "Driving": "#9C6B1C",
+    "Assistance": "#466030",
+    "Fire": "#8B3A62",
+    "eLearning": "#3D5A80",
+    "External": "#B5651D",
+};
+function categoryColor(category) {
+    return TRAINING_CATEGORY_COLORS[category] || MUTED;
+}
 function CourseFormModal({ initial, onCancel, onSave }) {
     const isEdit = !!initial;
     const [title, setTitle] = useState((initial && initial.title) || "");
@@ -34987,10 +35002,17 @@ function TrainingModule({ onBack }) {
 
     const categoryOptions = ["All", ...TRAINING_CATEGORIES];
     const categoryRow = (tab === "calendar" || tab === "upcoming" || tab === "manage") && React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" } },
-        categoryOptions.map((cat) => React.createElement("button", { key: cat, onClick: () => setCategoryFilter(cat), style: {
-                background: categoryFilter === cat ? "#345995" : "none", color: categoryFilter === cat ? "#fff" : INK,
-                border: `1px solid ${categoryFilter === cat ? "#345995" : LINE}`, borderRadius: 20, padding: "6px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-            } }, cat)));
+        categoryOptions.map((cat) => {
+            const dotColor = cat === "All" ? MUTED : categoryColor(cat);
+            const active = categoryFilter === cat;
+            return React.createElement("button", { key: cat, onClick: () => setCategoryFilter(cat), style: {
+                    display: "flex", alignItems: "center", gap: 6,
+                    background: active ? dotColor : "none", color: active ? "#fff" : INK,
+                    border: `1px solid ${active ? dotColor : LINE}`, borderRadius: 20, padding: "6px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                } },
+                React.createElement("span", { style: { width: 8, height: 8, borderRadius: "50%", background: active ? "#fff" : dotColor, display: "inline-block", flexShrink: 0 } }),
+                cat);
+        }));
     const visibleCourses = categoryFilter === "All" ? courses : courses.filter((c) => c.category === categoryFilter);
 
     let body = null;
