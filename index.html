@@ -34590,7 +34590,8 @@ function CourseCard({ course, onClick }) {
             React.createElement("div", { style: { fontWeight: 600, fontSize: 14 } }, course.title),
             React.createElement("span", { style: { fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: "#fff", background: chip.color, borderRadius: 20, padding: "2px 8px", whiteSpace: "nowrap" } }, chip.label)),
         React.createElement("div", { style: { fontSize: 12, color: MUTED, marginTop: 4 } }, `${fmt(course.courseDate)} · ${course.startTime}–${course.endTime}`),
-        course.location && React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 2 } }, course.location));
+        course.location && React.createElement("div", { style: { fontSize: 11.5, color: MUTED, marginTop: 2 } }, course.location),
+        course.category && React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 10.5, color: "#345995", marginTop: 4, textTransform: "uppercase", letterSpacing: 0.5 } }, course.category));
 }
 function MonthGrid({ cursor, eventsByDate, onOpenDay }) {
     const year = cursor.getFullYear(), month = cursor.getMonth();
@@ -34744,6 +34745,7 @@ function CourseDetailModal({ course, isManager, onClose, onChanged, onManage }) 
             React.createElement("button", { onClick: onClose, style: { ...primaryBtn, width: "100%" } }, "Done")));
 }
 const TRAINING_LOCATIONS = ["Training Room 1", "Head Office", "External Venue", "Online"];
+const TRAINING_CATEGORIES = ["Passenger Services", "Airside", "Security", "Driving", "Assistance", "Fire", "eLearning", "External"];
 function CourseFormModal({ initial, onCancel, onSave }) {
     const isEdit = !!initial;
     const [title, setTitle] = useState((initial && initial.title) || "");
@@ -34751,6 +34753,7 @@ function CourseFormModal({ initial, onCancel, onSave }) {
     const [courseDate, setCourseDate] = useState((initial && initial.courseDate) || "");
     const [startTime, setStartTime] = useState((initial && initial.startTime) || "");
     const [endTime, setEndTime] = useState((initial && initial.endTime) || "");
+    const [category, setCategory] = useState((initial && initial.category) || TRAINING_CATEGORIES[0]);
     const [location, setLocation] = useState((initial && initial.location) || "");
     const [capacity, setCapacity] = useState((initial && initial.capacity) || 12);
     const [confirmationEmail, setConfirmationEmail] = useState((initial && initial.confirmationEmail) || "");
@@ -34764,7 +34767,7 @@ function CourseFormModal({ initial, onCancel, onSave }) {
         setError(null);
         setBusy(true);
         try {
-            await onSave({ title: title.trim(), description: description.trim(), courseDate, startTime, endTime, location: location.trim(), capacity: Number(capacity), confirmationEmail: confirmationEmail.trim(), trainer: trainer.trim(), joiningInstructions: joiningInstructions.trim(), status: nextStatus || status });
+            await onSave({ title: title.trim(), category, description: description.trim(), courseDate, startTime, endTime, location: location.trim(), capacity: Number(capacity), confirmationEmail: confirmationEmail.trim(), trainer: trainer.trim(), joiningInstructions: joiningInstructions.trim(), status: nextStatus || status });
         }
         catch (e) {
             setError(e.message || "Couldn't save the course.");
@@ -34774,6 +34777,8 @@ function CourseFormModal({ initial, onCancel, onSave }) {
     return React.createElement(WideModalShell, { title: isEdit ? "Edit course" : "Create course", onCancel },
         React.createElement(Field, { label: "Course name" },
             React.createElement("input", { value: title, onChange: (e) => setTitle(e.target.value), style: inputStyle })),
+        React.createElement(Field, { label: "Category" },
+            React.createElement("select", { value: category, onChange: (e) => setCategory(e.target.value), style: inputStyle }, TRAINING_CATEGORIES.map((c) => React.createElement("option", { key: c, value: c }, c)))),
         React.createElement(Field, { label: "Course description" },
             React.createElement("textarea", { value: description, onChange: (e) => setDescription(e.target.value), rows: 3, style: { ...inputStyle, resize: "vertical", fontFamily: BODY_FONT } })),
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 } },
@@ -34918,6 +34923,7 @@ function ManageCourseDrawer({ course, onClose, onEdit, onCancelCourse, onRefresh
 function TrainingModule({ onBack }) {
     const isManager = currentUser && (currentUser.role === "management" || currentUser.role === "admin");
     const [tab, setTab] = useState("calendar");
+    const [categoryFilter, setCategoryFilter] = useState("All");
     const [courses, setCourses] = useState(null);
     const [myCourses, setMyCourses] = useState(null);
     const [error, setError] = useState(null);
@@ -34979,12 +34985,20 @@ function TrainingModule({ onBack }) {
                 color: tab === t.key ? INK : MUTED, fontWeight: tab === t.key ? 700 : 500, fontSize: 13.5, padding: "10px 4px", marginRight: 18, cursor: "pointer",
             } }, t.label)));
 
+    const categoryOptions = ["All", ...TRAINING_CATEGORIES];
+    const categoryRow = (tab === "calendar" || tab === "upcoming" || tab === "manage") && React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" } },
+        categoryOptions.map((cat) => React.createElement("button", { key: cat, onClick: () => setCategoryFilter(cat), style: {
+                background: categoryFilter === cat ? "#345995" : "none", color: categoryFilter === cat ? "#fff" : INK,
+                border: `1px solid ${categoryFilter === cat ? "#345995" : LINE}`, borderRadius: 20, padding: "6px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+            } }, cat)));
+    const visibleCourses = categoryFilter === "All" ? courses : courses.filter((c) => c.category === categoryFilter);
+
     let body = null;
     if (tab === "calendar") {
-        body = React.createElement(TrainingCalendar, { courses, calView, setCalView, cursor, setCursor, onOpenDay: setActiveDay, onOpenCourse: openCourse });
+        body = React.createElement(TrainingCalendar, { courses: visibleCourses, calView, setCalView, cursor, setCursor, onOpenDay: setActiveDay, onOpenCourse: openCourse });
     }
     else if (tab === "upcoming") {
-        const upcoming = courses.filter((c) => c.status === "published" && c.courseDate >= todayISO()).sort((a, b) => (a.courseDate + a.startTime).localeCompare(b.courseDate + b.startTime));
+        const upcoming = visibleCourses.filter((c) => c.status === "published" && c.courseDate >= todayISO()).sort((a, b) => (a.courseDate + a.startTime).localeCompare(b.courseDate + b.startTime));
         body = React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginTop: 20 } },
             upcoming.length === 0 && React.createElement("div", { style: { color: MUTED, padding: "20px 0" } }, "No upcoming courses."),
             upcoming.map((c) => React.createElement(CourseCard, { key: c.id, course: c, onClick: () => openCourse(c) })));
@@ -35002,7 +35016,7 @@ function TrainingModule({ onBack }) {
                     myCourses.previous.map((c) => React.createElement(CourseCard, { key: c.id, course: { ...c, userEnrolled: c.enrolment && c.enrolment.status === "confirmed" }, onClick: () => openCourse(c) }))));
     }
     else if (tab === "manage") {
-        const sorted = courses.slice().sort((a, b) => (b.courseDate + (b.startTime || "")).localeCompare(a.courseDate + (a.startTime || "")));
+        const sorted = visibleCourses.slice().sort((a, b) => (b.courseDate + (b.startTime || "")).localeCompare(a.courseDate + (a.startTime || "")));
         body = React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginTop: 20 } },
             sorted.length === 0 && React.createElement("div", { style: { color: MUTED, padding: "20px 0" } }, "No courses yet."),
             sorted.map((c) => React.createElement("div", { key: c.id, style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "12px 14px" } },
@@ -35020,6 +35034,7 @@ function TrainingModule({ onBack }) {
             header,
             error && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, marginTop: 16, fontSize: 13 } }, error),
             tabRow,
+            categoryRow,
             body),
         activeDay && React.createElement(DayEventsModal, { day: activeDay, courses: courses.filter((c) => c.courseDate === activeDay && c.status !== "cancelled"), onClose: () => setActiveDay(null), onOpenCourse: (c) => { setActiveDay(null); openCourse(c); } }),
         selectedCourse && React.createElement(CourseDetailModal, {

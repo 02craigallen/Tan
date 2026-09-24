@@ -50,6 +50,7 @@ app.http("training-courses-list-create", {
         const course = {
             id: crypto.randomUUID(),
             title: String(body.title).trim(),
+            category: (body.category || "").trim(),
             description: (body.description || "").trim(),
             courseDate: body.courseDate,
             startTime: body.startTime,
@@ -101,6 +102,7 @@ app.http("training-course-item", {
         const updated = {
             ...existing,
             title: body.title !== undefined ? String(body.title).trim() : existing.title,
+            category: body.category !== undefined ? body.category.trim() : existing.category,
             description: body.description !== undefined ? body.description.trim() : existing.description,
             courseDate: body.courseDate || existing.courseDate,
             startTime: body.startTime || existing.startTime,
