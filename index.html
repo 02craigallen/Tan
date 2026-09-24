@@ -33082,6 +33082,8 @@ function App() {
                 setFocusVehicleId(null);
                 window.history.replaceState({}, "", window.location.pathname);
             } });
+    if (view === "incidents")
+        return React.createElement(IncidentModule, { onBack: () => setView("dashboard") });
     if (view === "watchlog")
         return React.createElement(WatchLogModule, { onBack: () => setView("dashboard") });
     if (view === "personal")
@@ -33110,6 +33112,7 @@ function Dashboard({ onOpen }) {
                 React.createElement(ModuleCard, { eyebrow: "Equipment", title: "EMS", desc: "Test schedules, sign-offs, and full accountability history for every piece of station equipment.", icon: React.createElement(Wrench, { size: 22 }), color: RED, live: true, onClick: () => onOpen("ems") }),
                 React.createElement(ModuleCard, { eyebrow: "Equipment", title: "FAFAs", desc: "Fire extinguishers across every building on the airport, organised by location, with test dates and QR tags.", icon: React.createElement(Flame, { size: 22 }), color: "#AF3A22", live: true, onClick: () => onOpen("fafa") }),
                 React.createElement(ModuleCard, { eyebrow: "Fleet", title: "Vehicle Status", desc: "Every appliance in one place — outstanding defects, actions taken, and MOT, oil, tyre and aerodrome review info.", icon: React.createElement(Truck, { size: 22 }), color: "#3D5A80", live: true, onClick: () => onOpen("fleet") }),
+                React.createElement(ModuleCard, { eyebrow: "Watch Room", title: "Incident Log", desc: "Log any incident — aircraft, ground, standby, medical and more — each with the details that type actually needs.", icon: React.createElement(AlertTriangle, { size: 22 }), color: "#8B3A62", live: true, onClick: () => onOpen("incidents") }),
                 React.createElement(ModuleCard, { eyebrow: "Watch Room", title: "Watchroom Log", desc: "A permanent, timestamped record of the day, plus the riders board alongside it. Nothing can be edited or removed once entered.", icon: React.createElement(FileText, { size: 22 }), color: "#2E6E7E", live: true, onClick: () => onOpen("watchlog") }),
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Practical", desc: "Log practical activities and evidence — formal sign-off against versioned criteria comes next.", icon: React.createElement(ClipboardCheck, { size: 22 }), color: AMBER, live: true, onClick: () => onOpen("practical") }),
                 React.createElement(ModuleCard, { eyebrow: "Training", title: "Theory", desc: "Self-declared understanding, gated behind reading the material. Concept preview of the full item list available now.", icon: React.createElement(BookOpen, { size: 22 }), color: GREEN, badge: "Preview", onClick: () => onOpen("theory") }),
@@ -34028,6 +34031,438 @@ function FleetModule({ onBack, focusVehicleId, onFocusHandled }) {
         addDefectFor && React.createElement(AddDefectModal, { vehicle: addDefectFor, onCancel: () => setAddDefectFor(null), onAdd: (payload) => addDefect(addDefectFor.id, payload) }),
         actionFor && React.createElement(AddActionModal, { defect: actionFor, onCancel: () => setActionFor(null), onAdd: (payload) => logAction(actionFor.id, payload) }),
         resolveFor && React.createElement(ResolveDefectModal, { defect: resolveFor, onCancel: () => setResolveFor(null), onResolve: (payload) => resolveDefect(resolveFor.id, payload) }));
+}
+
+// ---------- Incident Log module ----------
+const INCIDENT_LOG_KEY = "incidents:log";
+const CREW_COLS = [
+    { key: "fire1", label: "Fire 1" },
+    { key: "fire2", label: "Fire 2" },
+    { key: "fire3", label: "Fire 3" },
+    { key: "bcu", label: "BCU" },
+    { key: "fireCommand", label: "Fire Command" },
+];
+const INCIDENT_TYPES = [
+    {
+        key: "Aircraft Incident",
+        fields: [
+            { key: "toc", label: "T.O.C.", type: "text" },
+            { key: "inAttendance", label: "In Attendance", type: "text" },
+            { key: "tacMode", label: "TAC Mode", type: "text" },
+            { key: "location", label: "Location", type: "text" },
+            { key: "cfrsAttendance", label: "CFRS in Attendance?", type: "text" },
+            { key: "arrivalTime", label: "Arrival Time", type: "text" },
+            { key: "otherServices", label: "Other Attending Services", type: "text" },
+            { key: "timeOfStop", label: "Time of stop", type: "text" },
+            { key: "returnToStn", label: "Return to Stn", type: "text" },
+        ],
+        aircraftTable: { rows: 2, columns: [
+                { key: "aircraft", label: "Aircraft" }, { key: "registration", label: "Registration" }, { key: "operator", label: "Operator" },
+                { key: "pob", label: "P.O.B" }, { key: "casualties", label: "Casualties" }, { key: "fatalities", label: "Fatalities" }, { key: "dangerousGoods", label: "Dangerous Goods?" },
+            ] },
+    },
+    {
+        key: "Ground Incident",
+        fields: [
+            { key: "toc", label: "T.O.C.", type: "text" },
+            { key: "inAttendance", label: "In Attendance", type: "text" },
+            { key: "tacMode", label: "TAC Mode", type: "text" },
+            { key: "cfrsAttendance", label: "CFRS in Attendance?", type: "text" },
+            { key: "arrivalTime", label: "Arrival Time", type: "text" },
+            { key: "otherServices", label: "Other Attending Services", type: "text" },
+            { key: "timeOfStop", label: "Time of stop", type: "text" },
+            { key: "returnToStn", label: "Return to Stn", type: "text" },
+        ],
+        aircraftTable: { rows: 2, columns: [
+                { key: "aircraft", label: "Aircraft" }, { key: "registration", label: "Registration" }, { key: "operator", label: "Operator" },
+                { key: "pob", label: "P.O.B" }, { key: "casualties", label: "Casualties" }, { key: "dangerousGoods", label: "Dangerous Goods?" },
+            ] },
+        vehicleTable: { rows: 2, columns: [
+                { key: "vehicle", label: "Vehicle" }, { key: "driver", label: "Driver" }, { key: "fuelLtrs", label: "Fuel? Ltrs" }, { key: "equipment", label: "Equipment" }, { key: "operator", label: "Operator" },
+            ] },
+    },
+    {
+        key: "Weather Standby",
+        fields: [
+            { key: "weatherType", label: "Weather type", type: "text" },
+            { key: "runwayInUse", label: "Runway in Use", type: "text" },
+            { key: "windDirection", label: "Wind Direction", type: "text" },
+            { key: "windSpeed", label: "Wind Speed", type: "text" },
+            { key: "visibility", label: "Visibility", type: "text" },
+            { key: "cloudBase", label: "Cloud Base", type: "text" },
+            { key: "temperature", label: "Temperature", type: "text" },
+            { key: "runwaySurface", label: "R-Way Surface", type: "text" },
+        ],
+        aircraftTable: { rows: 4, columns: [
+                { key: "aircraftType", label: "Aircraft Type" }, { key: "aircraftReg", label: "Aircraft Reg" }, { key: "operator", label: "Operator" }, { key: "inOutbound", label: "In/Outbound" }, { key: "incidentNumber", label: "Incident Number" },
+            ] },
+    },
+    {
+        key: "Royal Standby",
+        fields: [
+            { key: "weatherType", label: "Weather type", type: "text" },
+            { key: "runwayInUse", label: "Runway in Use", type: "text" },
+            { key: "windDirection", label: "Wind Direction", type: "text" },
+            { key: "windSpeed", label: "Wind Speed", type: "text" },
+            { key: "visibility", label: "Visibility", type: "text" },
+            { key: "cloudBase", label: "Cloud Base", type: "text" },
+            { key: "temperature", label: "Temperature", type: "text" },
+            { key: "runwaySurface", label: "R-Way Surface", type: "text" },
+        ],
+        aircraftTable: { rows: 4, columns: [
+                { key: "aircraftType", label: "Aircraft Type" }, { key: "aircraftReg", label: "Aircraft Reg" }, { key: "inOutbound", label: "In/Outbound" }, { key: "incidentNumber", label: "Incident Number" },
+            ] },
+    },
+    {
+        key: "Local Stand-By",
+        fields: [
+            { key: "aircraftType", label: "Aircraft Type", type: "text" },
+            { key: "registration", label: "Registration", type: "text" },
+            { key: "flightFrom", label: "Flight From", type: "text" },
+            { key: "flightTo", label: "Flight To", type: "text" },
+            { key: "runway", label: "Runway", type: "text" },
+            { key: "operator", label: "Operator", type: "text" },
+            { key: "pob", label: "P.O.B", type: "text" },
+            { key: "dangerousGoods", label: "Dangerous Goods", type: "text" },
+            { key: "reasonForStandby", label: "Reason For Stand-By", type: "textarea" },
+        ],
+    },
+    {
+        key: "Rotors Running Refuel",
+        fields: [],
+        aircraftTable: { rows: 6, columns: [
+                { key: "aircraftType", label: "Aircraft Type" }, { key: "aircraftReg", label: "Aircraft Reg" }, { key: "operator", label: "Operator" }, { key: "incidentNumber", label: "Incident Number" },
+            ] },
+    },
+    {
+        key: "Domestic Incident",
+        fields: [
+            { key: "location", label: "Location of Incident", type: "text" },
+            { key: "callReceivedVia", label: "Call Received Via", type: "text" },
+            { key: "inAttendance", label: "In Attendance", type: "text" },
+            { key: "stopMsg", label: "Stop Msg", type: "text" },
+            { key: "cfrsAttendance", label: "CFRS in Attendance", type: "text" },
+            { key: "otherServices", label: "Other Services in Attendance", type: "text" },
+            { key: "alarmType", label: "Actual or False Alarm", type: "select", options: ["Actual", "False Alarm"] },
+            { key: "eco", label: "ECO", type: "text" },
+        ],
+        crewRoleLabels: ["I.C.", "Driver", "BA/SL", "BA/SL"],
+    },
+    {
+        key: "Medical",
+        fields: [
+            { key: "location", label: "Location of Incident", type: "text" },
+            { key: "patientsName", label: "Patient's Name", type: "text" },
+            { key: "injuryIllness", label: "Injury / Illness", type: "text" },
+            { key: "inAttendance", label: "In Attendance", type: "text" },
+            { key: "ambulanceCalled", label: "Ambulance called", type: "checkbox" },
+            { key: "handoverSheetCompleted", label: "Handover sheet completed", type: "checkbox" },
+            { key: "hazardousWasteDisposed", label: "Hazardous waste disposed", type: "checkbox" },
+            { key: "o2Used", label: "O2 used", type: "checkbox" },
+            { key: "aedUsed", label: "AED used", type: "checkbox" },
+            { key: "medicalEquipmentUsed", label: "Medical equipment used", type: "text" },
+        ],
+    },
+];
+function incidentTypeDef(type) {
+    return INCIDENT_TYPES.find((t) => t.key === type) || null;
+}
+function emptyCrewRows(def) {
+    const labels = def && def.crewRoleLabels;
+    const count = labels ? labels.length : 4;
+    return Array.from({ length: count }, (_, i) => ({ id: uid(), roleLabel: labels ? labels[i] : "", fire1: "", fire2: "", fire3: "", bcu: "", fireCommand: "" }));
+}
+function emptyTableRows(table) {
+    if (!table) return [];
+    return Array.from({ length: table.rows }, () => {
+        const row = { id: uid() };
+        table.columns.forEach((c) => { row[c.key] = ""; });
+        return row;
+    });
+}
+function emptyExtra(def) {
+    const extra = {};
+    (def ? def.fields : []).forEach((f) => { extra[f.key] = f.type === "checkbox" ? false : ""; });
+    return extra;
+}
+function incidentTypeColor(type) {
+    const colors = {
+        "Aircraft Incident": RED, "Ground Incident": "#AF3A22", "Weather Standby": "#345995",
+        "Royal Standby": "#6B5B95", "Local Stand-By": "#2E6E7E", "Rotors Running Refuel": "#9C6B1C",
+        "Domestic Incident": "#7C7160", "Medical": "#466030",
+    };
+    return colors[type] || MUTED;
+}
+function EditableRowsTable({ columns, rows, onChange, roleLabels }) {
+    function updateCell(rowIdx, key, value) {
+        onChange(rows.map((r, i) => (i === rowIdx ? { ...r, [key]: value } : r)));
+    }
+    return React.createElement("div", { style: { overflowX: "auto" } },
+        React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12.5 } },
+            React.createElement("thead", null,
+                React.createElement("tr", null,
+                    roleLabels && React.createElement("th", { style: { textAlign: "left", padding: "4px 6px", color: MUTED, fontWeight: 600 } }, ""),
+                    columns.map((c) => React.createElement("th", { key: c.key, style: { textAlign: "left", padding: "4px 6px", color: MUTED, fontWeight: 600, whiteSpace: "nowrap" } }, c.label)))),
+            React.createElement("tbody", null, rows.map((row, i) => React.createElement("tr", { key: row.id },
+                roleLabels && React.createElement("td", { style: { padding: "4px 6px", fontWeight: 600, whiteSpace: "nowrap" } }, row.roleLabel),
+                columns.map((c) => React.createElement("td", { key: c.key, style: { padding: "3px 4px" } },
+                    React.createElement("input", { value: row[c.key] || "", onChange: (e) => updateCell(i, c.key, e.target.value), style: { ...inputStyle, padding: "6px 8px", fontSize: 12.5 } }))))))));
+}
+function ReadOnlyRowsTable({ columns, rows, roleLabels }) {
+    const filled = rows.filter((row) => roleLabels || columns.some((c) => (row[c.key] || "").trim()));
+    if (filled.length === 0) return React.createElement("div", { style: { color: MUTED, fontSize: 13 } }, "Nothing recorded.");
+    return React.createElement("div", { style: { overflowX: "auto" } },
+        React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 12.5 } },
+            React.createElement("thead", null,
+                React.createElement("tr", null,
+                    roleLabels && React.createElement("th", { style: { textAlign: "left", padding: "4px 6px", color: MUTED, fontWeight: 600 } }, ""),
+                    columns.map((c) => React.createElement("th", { key: c.key, style: { textAlign: "left", padding: "4px 6px", color: MUTED, fontWeight: 600, whiteSpace: "nowrap" } }, c.label)))),
+            React.createElement("tbody", null, filled.map((row) => React.createElement("tr", { key: row.id, style: { borderTop: `1px solid ${LINE}` } },
+                roleLabels && React.createElement("td", { style: { padding: "5px 6px", fontWeight: 600, whiteSpace: "nowrap" } }, row.roleLabel),
+                columns.map((c) => React.createElement("td", { key: c.key, style: { padding: "5px 6px" } }, row[c.key] || "—")))))));
+}
+function renderExtraFieldInput(field, value, onChange) {
+    if (field.type === "textarea") {
+        return React.createElement("textarea", { value: value || "", onChange: (e) => onChange(e.target.value), rows: 3, style: { ...inputStyle, resize: "vertical", fontFamily: BODY_FONT } });
+    }
+    if (field.type === "select") {
+        return React.createElement("select", { value: value || "", onChange: (e) => onChange(e.target.value), style: inputStyle },
+            React.createElement("option", { value: "" }, "—"),
+            field.options.map((o) => React.createElement("option", { key: o, value: o }, o)));
+    }
+    if (field.type === "checkbox") {
+        return React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, cursor: "pointer" } },
+            React.createElement("input", { type: "checkbox", checked: !!value, onChange: (e) => onChange(e.target.checked) }),
+            field.label);
+    }
+    return React.createElement("input", { value: value || "", onChange: (e) => onChange(e.target.value), style: inputStyle });
+}
+function WideModalShell({ title, onCancel, children }) {
+    return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
+        React.createElement("div", { onClick: onCancel, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" } }),
+        React.createElement("div", { style: { position: "relative", background: BG, border: `1px solid ${LINE}`, borderRadius: 10, width: "min(760px, 95vw)", padding: 22, maxHeight: "90vh", overflowY: "auto" } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 } },
+                React.createElement("h3", { style: { fontFamily: DISPLAY_FONT, fontSize: 20, margin: 0, fontWeight: 600 } }, title),
+                React.createElement("button", { onClick: onCancel, style: { background: "none", border: "none", color: MUTED } },
+                    React.createElement(X, { size: 18 }))),
+            children)));
+}
+function IncidentFormModal({ initial, onCancel, onSubmit }) {
+    const isEdit = !!initial;
+    const [type, setType] = useState(initial ? initial.type : INCIDENT_TYPES[0].key);
+    const def = incidentTypeDef(type);
+    const [date, setDate] = useState((initial && initial.date) || todayISO());
+    const [dutyCrew, setDutyCrew] = useState((initial && initial.dutyCrew) || "");
+    const [completedBy, setCompletedBy] = useState((initial && initial.completedBy) || (currentUser && currentUser.name) || "");
+    const [incidentNumber, setIncidentNumber] = useState((initial && initial.incidentNumber) || "");
+    const [timeOfCall, setTimeOfCall] = useState((initial && initial.timeOfCall) || "");
+    const [timeClosed, setTimeClosed] = useState((initial && initial.timeClosed) || "");
+    const [report, setReport] = useState((initial && initial.report) || "");
+    const [extra, setExtra] = useState(() => ((initial && initial.extra) ? { ...emptyExtra(def), ...initial.extra } : emptyExtra(def)));
+    const [aircraftRows, setAircraftRows] = useState(() => (initial && initial.aircraftRows) || emptyTableRows(def && def.aircraftTable));
+    const [vehicleRows, setVehicleRows] = useState(() => (initial && initial.vehicleRows) || emptyTableRows(def && def.vehicleTable));
+    const [crewRows, setCrewRows] = useState(() => (initial && initial.crewRows) || emptyCrewRows(def));
+    function changeType(nextType) {
+        const nextDef = incidentTypeDef(nextType);
+        setType(nextType);
+        setExtra(emptyExtra(nextDef));
+        setAircraftRows(emptyTableRows(nextDef && nextDef.aircraftTable));
+        setVehicleRows(emptyTableRows(nextDef && nextDef.vehicleTable));
+        setCrewRows(emptyCrewRows(nextDef));
+    }
+    const canSubmit = date && incidentNumber.trim().length > 0;
+    function handleSubmit() {
+        onSubmit({
+            type, date, dutyCrew: dutyCrew.trim(), completedBy: completedBy.trim(), incidentNumber: incidentNumber.trim(),
+            timeOfCall: timeOfCall.trim(), timeClosed: timeClosed.trim(), report: report.trim(),
+            extra, aircraftRows, vehicleRows, crewRows,
+        });
+    }
+    return React.createElement(WideModalShell, { title: isEdit ? "Edit incident" : "Log an incident", onCancel },
+        !isEdit && React.createElement(Field, { label: "Incident type" },
+            React.createElement("select", { value: type, onChange: (e) => changeType(e.target.value), style: inputStyle },
+                INCIDENT_TYPES.map((t) => React.createElement("option", { key: t.key, value: t.key }, t.key)))),
+        isEdit && React.createElement(Field, { label: "Incident type" },
+            React.createElement("div", { style: { ...inputStyle, background: PANEL_RAISED } }, type)),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
+            React.createElement(Field, { label: "Date of occurrence" },
+                React.createElement("input", { type: "date", value: date, max: todayISO(), onChange: (e) => setDate(e.target.value), style: inputStyle })),
+            React.createElement(Field, { label: "Incident number" },
+                React.createElement("input", { value: incidentNumber, onChange: (e) => setIncidentNumber(e.target.value), style: inputStyle }))),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
+            React.createElement(Field, { label: "Duty crew / Watch" },
+                React.createElement("input", { value: dutyCrew, onChange: (e) => setDutyCrew(e.target.value), style: inputStyle })),
+            React.createElement(Field, { label: "Completed by" },
+                React.createElement(SignedByField, { value: completedBy, onChange: setCompletedBy }))),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
+            React.createElement(Field, { label: "Time of call" },
+                React.createElement("input", { value: timeOfCall, onChange: (e) => setTimeOfCall(e.target.value), placeholder: "e.g. 14:32", style: inputStyle })),
+            React.createElement(Field, { label: "Time closed" },
+                React.createElement("input", { value: timeClosed, onChange: (e) => setTimeClosed(e.target.value), placeholder: "e.g. 15:10", style: inputStyle }))),
+        def && def.fields.length > 0 && React.createElement("div", { style: { marginTop: 4, marginBottom: 14 } },
+            React.createElement(SectionLabel, null, type),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 10 } },
+                def.fields.map((f) => React.createElement(Field, { key: f.key, label: f.type === "checkbox" ? "" : f.label },
+                    renderExtraFieldInput(f, extra[f.key], (v) => setExtra({ ...extra, [f.key]: v })))))),
+        def && def.aircraftTable && React.createElement("div", { style: { marginBottom: 14 } },
+            React.createElement(SectionLabel, null, "Aircraft"),
+            React.createElement("div", { style: { marginTop: 10 } }, React.createElement(EditableRowsTable, { columns: def.aircraftTable.columns, rows: aircraftRows, onChange: setAircraftRows }))),
+        def && def.vehicleTable && React.createElement("div", { style: { marginBottom: 14 } },
+            React.createElement(SectionLabel, null, "Other vehicles/equipment involved"),
+            React.createElement("div", { style: { marginTop: 10 } }, React.createElement(EditableRowsTable, { columns: def.vehicleTable.columns, rows: vehicleRows, onChange: setVehicleRows }))),
+        React.createElement("div", { style: { marginBottom: 14 } },
+            React.createElement(SectionLabel, null, "Fire crew"),
+            React.createElement("div", { style: { marginTop: 10 } }, React.createElement(EditableRowsTable, { columns: CREW_COLS, rows: crewRows, onChange: setCrewRows, roleLabels: !!(def && def.crewRoleLabels) }))),
+        React.createElement(Field, { label: "Report" },
+            React.createElement("textarea", { value: report, onChange: (e) => setReport(e.target.value), rows: 4, style: { ...inputStyle, resize: "vertical", fontFamily: BODY_FONT } })),
+        React.createElement(ModalActions, { onCancel },
+            React.createElement("button", { disabled: !canSubmit, onClick: handleSubmit, style: { ...primaryBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" } }, "Save incident")));
+}
+function IncidentDetailDrawer({ incident, onClose, onEdit, onDelete }) {
+    const def = incidentTypeDef(incident.type);
+    return React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 40 } },
+        React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" } }),
+        React.createElement("div", { style: { position: "absolute", right: 0, top: 0, bottom: 0, width: "min(640px, 100%)", background: BG, borderLeft: `1px solid ${LINE}`, overflowY: "auto", padding: 24 } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
+                React.createElement("div", null,
+                    React.createElement("span", { style: { display: "inline-block", fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: "#fff", background: incidentTypeColor(incident.type), borderRadius: 20, padding: "3px 10px" } }, incident.type),
+                    React.createElement("h2", { style: { fontFamily: DISPLAY_FONT, fontSize: 24, margin: "8px 0 0", fontWeight: 600 } }, incident.incidentNumber || "No incident number"),
+                    React.createElement("div", { style: { fontSize: 12.5, color: MUTED, marginTop: 3 } }, fmt(incident.date))),
+                React.createElement("button", { onClick: onClose, style: { background: "none", border: "none", color: MUTED } },
+                    React.createElement(X, { size: 20 }))),
+            React.createElement("div", { style: { display: "flex", gap: 10, marginTop: 14 } },
+                React.createElement("button", { onClick: onEdit, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: INK, padding: "5px 12px", borderRadius: 20, fontSize: 13 } },
+                    React.createElement(Pencil, { size: 13 }),
+                    " Edit"),
+                React.createElement("button", { onClick: onDelete, style: { display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${LINE}`, color: RED, padding: "5px 12px", borderRadius: 20, fontSize: 13 } },
+                    React.createElement(Trash2, { size: 13 }),
+                    " Delete")),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 22, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: 16 } },
+                React.createElement(InfoRow, { label: "Duty crew / Watch", value: incident.dutyCrew }),
+                React.createElement(InfoRow, { label: "Completed by", value: incident.completedBy }),
+                React.createElement(InfoRow, { label: "Time of call", value: incident.timeOfCall }),
+                React.createElement(InfoRow, { label: "Time closed", value: incident.timeClosed })),
+            def && def.fields.length > 0 && React.createElement("div", { style: { marginTop: 22 } },
+                React.createElement(SectionLabel, null, incident.type),
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 10, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: 16 } },
+                    def.fields.map((f) => React.createElement(InfoRow, { key: f.key, label: f.label, value: f.type === "checkbox" ? (incident.extra[f.key] ? "Yes" : "No") : incident.extra[f.key] })))),
+            def && def.aircraftTable && React.createElement("div", { style: { marginTop: 22 } },
+                React.createElement(SectionLabel, null, "Aircraft"),
+                React.createElement("div", { style: { marginTop: 10 } }, React.createElement(ReadOnlyRowsTable, { columns: def.aircraftTable.columns, rows: incident.aircraftRows || [] }))),
+            def && def.vehicleTable && React.createElement("div", { style: { marginTop: 22 } },
+                React.createElement(SectionLabel, null, "Other vehicles/equipment involved"),
+                React.createElement("div", { style: { marginTop: 10 } }, React.createElement(ReadOnlyRowsTable, { columns: def.vehicleTable.columns, rows: incident.vehicleRows || [] }))),
+            React.createElement("div", { style: { marginTop: 22 } },
+                React.createElement(SectionLabel, null, "Fire crew"),
+                React.createElement("div", { style: { marginTop: 10 } }, React.createElement(ReadOnlyRowsTable, { columns: CREW_COLS, rows: incident.crewRows || [], roleLabels: !!(def && def.crewRoleLabels) }))),
+            incident.report && React.createElement("div", { style: { marginTop: 22 } },
+                React.createElement(SectionLabel, null, "Report"),
+                React.createElement("div", { style: { fontSize: 13.5, marginTop: 8, whiteSpace: "pre-wrap", lineHeight: 1.5 } }, incident.report))));
+}
+function IncidentCard({ incident, onClick }) {
+    return React.createElement("button", { onClick, style: { textAlign: "left", background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "14px 16px", cursor: "pointer" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 } },
+            React.createElement("span", { style: { display: "inline-block", fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: "#fff", background: incidentTypeColor(incident.type), borderRadius: 20, padding: "2px 9px" } }, incident.type),
+            React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11.5, color: MUTED } }, fmt(incident.date))),
+        React.createElement("div", { style: { fontWeight: 600, fontSize: 15, marginTop: 8 } }, incident.incidentNumber || "No incident number"),
+        React.createElement("div", { style: { fontSize: 12.5, color: MUTED, marginTop: 3 } }, incident.dutyCrew || "—"));
+}
+function IncidentModule({ onBack }) {
+    const [incidents, setIncidents] = useState(null);
+    const [ready, setReady] = useState(false);
+    const [error, setError] = useState(null);
+    const [typeFilter, setTypeFilter] = useState("All");
+    const [selectedId, setSelectedId] = useState(null);
+    const [showAdd, setShowAdd] = useState(false);
+    const [editFor, setEditFor] = useState(null);
+    useEffect(() => {
+        (async () => {
+            try {
+                let list;
+                try {
+                    const r = await window.storage.get(INCIDENT_LOG_KEY, true);
+                    list = r ? JSON.parse(r.value) : [];
+                }
+                catch {
+                    list = [];
+                }
+                setIncidents(list);
+                setReady(true);
+            }
+            catch (e) {
+                setError("Couldn't load the incident log. You can still browse, but changes may not save.");
+                setIncidents([]);
+                setReady(true);
+            }
+        })();
+    }, []);
+    async function persist(next) {
+        setIncidents(next);
+        try {
+            await window.storage.set(INCIDENT_LOG_KEY, JSON.stringify(next), true);
+        }
+        catch {
+            setError("Change made, but saving failed — it may not persist.");
+        }
+    }
+    function addIncident(payload) {
+        persist([{ id: uid(), createdAt: new Date().toISOString(), ...payload }, ...incidents]);
+        setShowAdd(false);
+    }
+    function saveIncident(id, payload) {
+        persist(incidents.map((i) => (i.id === id ? { ...i, ...payload } : i)));
+        setEditFor(null);
+    }
+    function deleteIncident(id) {
+        if (!window.confirm("Delete this incident record? This can't be undone."))
+            return;
+        persist(incidents.filter((i) => i.id !== id));
+        setSelectedId(null);
+    }
+    const selected = incidents && selectedId ? incidents.find((i) => i.id === selectedId) : null;
+    const filtered = useMemo(() => {
+        if (!incidents) return [];
+        const list = typeFilter === "All" ? incidents : incidents.filter((i) => i.type === typeFilter);
+        return list.slice().sort((a, b) => (b.date + (b.timeOfCall || "")).localeCompare(a.date + (a.timeOfCall || "")));
+    }, [incidents, typeFilter]);
+    if (!ready) {
+        return React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
+            React.createElement(FontImport, null),
+            React.createElement(TopBanner, null),
+            React.createElement("div", { style: { padding: 60, textAlign: "center", color: MUTED } }, "Loading incident log…"));
+    }
+    const header = React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6, flexWrap: "wrap", gap: 16 } },
+        React.createElement("div", null,
+            React.createElement("button", { onClick: onBack, style: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: MUTED, fontSize: 13, padding: 0, marginBottom: 10 } },
+                React.createElement(ChevronRight, { size: 14, style: { transform: "rotate(180deg)" } }),
+                " Dashboard"),
+            React.createElement("div", { style: { fontFamily: MONO_FONT, fontSize: 11, letterSpacing: 3, color: RED, textTransform: "uppercase", marginBottom: 4 } }, "Incident Log"),
+            React.createElement("h1", { style: { fontFamily: DISPLAY_FONT, fontWeight: 600, fontSize: 34, margin: 0, letterSpacing: 0.5 } }, "Incident Log")),
+        React.createElement("button", { onClick: () => setShowAdd(true), style: { display: "flex", alignItems: "center", gap: 8, background: RED, color: "#fff", border: "none", padding: "10px 18px", borderRadius: 6, fontWeight: 600, fontSize: 14 } },
+            React.createElement(Plus, { size: 16 }),
+            " Log incident"));
+    const filterRow = React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18, alignItems: "center" } },
+        React.createElement(Select, { value: typeFilter, onChange: setTypeFilter, options: ["All", ...INCIDENT_TYPES.map((t) => t.key)] }),
+        React.createElement(StatChip, { label: "Total", value: incidents.length, color: MUTED }));
+    const list = React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16, marginTop: 22 } },
+        filtered.map((i) => React.createElement(IncidentCard, { key: i.id, incident: i, onClick: () => setSelectedId(i.id) })),
+        filtered.length === 0 && React.createElement("div", { style: { gridColumn: "1/-1", padding: 40, textAlign: "center", color: MUTED, border: `1px dashed ${LINE}`, borderRadius: 10 } }, "No incidents logged yet."));
+    return React.createElement("div", { style: { background: BG, minHeight: "100%", fontFamily: BODY_FONT, color: INK } },
+        React.createElement(FontImport, null),
+        React.createElement(TopBanner, null),
+        React.createElement("div", { style: { maxWidth: 1180, margin: "0 auto", padding: "28px 20px 60px", position: "relative" } },
+            header,
+            error && React.createElement("div", { style: { background: "#F7DFD8", border: `1px solid ${RED}`, color: "#7A2A18", padding: "10px 14px", borderRadius: 6, marginBottom: 16, fontSize: 13 } }, error),
+            filterRow,
+            list),
+        selected && React.createElement(IncidentDetailDrawer, {
+            incident: selected,
+            onClose: () => setSelectedId(null),
+            onEdit: () => setEditFor(selected),
+            onDelete: () => deleteIncident(selected.id),
+        }),
+        showAdd && React.createElement(IncidentFormModal, { onCancel: () => setShowAdd(false), onSubmit: addIncident }),
+        editFor && React.createElement(IncidentFormModal, { initial: editFor, onCancel: () => setEditFor(null), onSubmit: (payload) => saveIncident(editFor.id, payload) }));
 }
 
 // ---------- Watch Room Log ----------
